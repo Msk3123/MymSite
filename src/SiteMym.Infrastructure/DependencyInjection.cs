@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IAssistantNoteRepository, AssistantNoteRepository>();
 
         services.AddHealthChecks().AddDbContextCheck<AppDbContext>("database");
 

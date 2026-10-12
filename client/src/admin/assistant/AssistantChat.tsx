@@ -96,6 +96,7 @@ function DraftCardView({ draft: d, onDecide }: { draft: DraftItem; onDecide: (ch
         {[d.brand, CATEGORIES[d.category], CONDITIONS[d.condition].label, d.composition].filter(Boolean).join(' · ')}
       </p>
       {d.description && <p className="ai-draft__desc">{d.description}</p>}
+      {d.storageLocation && <p className="ai-draft__meta">Де лежить: {d.storageLocation}</p>}
       <div className="ai-draft__row">
         <label className={`ai-draft__field${check('sizeCm')}`}>
           <span>Зріст, см</span>
@@ -105,7 +106,9 @@ function DraftCardView({ draft: d, onDecide }: { draft: DraftItem; onDecide: (ch
         <label className="ai-draft__field">
           <span>Ціна, грн</span>
           <input inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d]/g, ''))} placeholder="200" />
-          <small>{d.priceFrom === 'hint' && Number(price) === d.price ? 'як у схожих речей' : ''}</small>
+          <small>
+            {Number(price) !== d.price ? '' : d.priceFrom === 'hint' ? 'як у схожих речей' : d.priceFrom === 'memory' ? 'за вашим правилом' : ''}
+          </small>
         </label>
       </div>
       {d.note && <span className="ai-action__note ai-action__note--error">{d.note}</span>}
@@ -149,6 +152,11 @@ export function AssistantLog({ messages, busy, intro, onDecide, onDraft }: Assis
             )}
             {m.text}
           </div>
+          {m.remembered && m.remembered.length > 0 && (
+            <div className="ai-remembered">
+              {m.remembered.map((r, k) => <span key={k}>Запам’ятала: {r}</span>)}
+            </div>
+          )}
           {m.draft && <DraftCardView draft={m.draft} onDecide={(choice) => onDraft?.(i, choice)} />}
           {m.products && m.products.length > 0 && <ProductStrip products={m.products} />}
           {m.actions?.map((card, j) => (

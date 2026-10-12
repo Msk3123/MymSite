@@ -26,6 +26,32 @@ namespace SiteMym.Infrastructure.Persistence.Migrations
             modelBuilder.HasSequence<int>("order_numbers")
                 .StartsAt(1001L);
 
+            modelBuilder.Entity("SiteMym.Domain.Assistant.AssistantNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("text");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_assistant_notes");
+
+                    b.ToTable("assistant_notes", (string)null);
+                });
+
             modelBuilder.Entity("SiteMym.Domain.Orders.Order", b =>
                 {
                     b.Property<Guid>("Id")

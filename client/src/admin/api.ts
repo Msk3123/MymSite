@@ -161,6 +161,16 @@ export interface ProductSuggestion {
   defectNote: string | null
   conditionNote: string | null
   uncertain: string[]
+  /** Ціна й «де лежить» — лише якщо в пам'яті помічника є мамине правило для такої речі */
+  price: number | null
+  storageLocation: string | null
+}
+
+/** Що помічник пам'ятає про маму між розмовами. */
+export interface AssistantNote {
+  id: string
+  text: string
+  updatedAtUtc: string
 }
 
 export type AssistantActionKind =
@@ -269,7 +279,7 @@ export const adminApi = {
 
   assistantEnabled: () => request<{ enabled: boolean }>('/admin/assistant'),
   ask: (messages: ChatMessage[], context: string, allowActions: boolean) =>
-    request<{ text: string; actions: AssistantAction[]; products: AdminProductListItem[] }>('/admin/assistant', {
+    request<{ text: string; actions: AssistantAction[]; products: AdminProductListItem[]; remembered: string[] }>('/admin/assistant', {
       method: 'POST',
       body: json({ messages, context, allowActions }),
     }),
@@ -281,4 +291,9 @@ export const adminApi = {
     if (tagIndex !== null) form.append('tagIndex', String(tagIndex))
     return request<ProductSuggestion>('/admin/assistant/describe', { method: 'POST', body: form })
   },
+  notes: () => request<AssistantNote[]>('/admin/assistant/notes'),
+  addNote: (text: string) => request<AssistantNote>('/admin/assistant/notes', { method: 'POST', body: json({ text }) }),
+  updateNote: (id: string, text: string) =>
+    request<AssistantNote>(`/admin/assistant/notes/${id}`, { method: 'PUT', body: json({ text }) }),
+  deleteNote: (id: string) => request<void>(`/admin/assistant/notes/${id}`, { method: 'DELETE' }),
 }

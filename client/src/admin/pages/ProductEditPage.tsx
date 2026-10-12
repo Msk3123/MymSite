@@ -278,6 +278,9 @@ export function ProductEditPage() {
       insulation: s.insulation ?? f.insulation,
       description: s.description || f.description,
       defectNote: s.defectNote ?? f.defectNote,
+      // Ціна й місце — за маминими правилами з пам'яті помічника, лише якщо вона ще не вписала свої.
+      price: f.price.trim() || !s.price ? f.price : String(s.price),
+      storageLocation: f.storageLocation.trim() || !s.storageLocation ? f.storageLocation : s.storageLocation,
       measurements: f.measurements.every((m) => !m.value.trim()) ? presetFor(s.category) : f.measurements,
     }))
     setSources({

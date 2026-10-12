@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddSingleton<ShopClock>();
         services.AddScoped<AssistantTools>();
         services.AddScoped<AssistantActionTools>();
+        services.AddScoped<AssistantMemory>();
         services.AddScoped<ProductRemover>();
 
         return services;

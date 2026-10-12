@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { SparkleIcon } from '../../components/Icons'
 import { formatPrice, plural } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
 import { adminApi } from '../api'
 import { ActionModeSwitch, AssistantInput, AssistantLog } from '../assistant/AssistantChat'
+import { MemoryDialog } from '../assistant/MemoryDialog'
 import { useAssistantChat } from '../assistant/useAssistantChat'
 import { greeting, useAdmin, useAssistantContext } from '../ui'
 
@@ -35,6 +37,7 @@ export function AssistantPage() {
   useAssistantContext('сторінка помічника')
   const { data: status } = useAsync('assistant-status', adminApi.assistantEnabled)
   const chat = useAssistantChat(assistantContext, refreshSummary)
+  const [memoryOpen, setMemoryOpen] = useState(false)
 
   return (
     <div className="a-page a-page--wide ai-page">
@@ -47,6 +50,7 @@ export function AssistantPage() {
               {chat.actionsOn ? 'Режим дій: готує зміни, виконує після вашого «Так».' : 'Підказує й відповідає. Змінюєте все ви.'}
             </span>
           </div>
+          <button type="button" className="a-btn a-btn--outline" onClick={() => setMemoryOpen(true)}>Пам’ять</button>
           {chat.messages.length > 0 && (
             <button type="button" className="a-link-btn" disabled={chat.busy} onClick={chat.reset}>Почати заново</button>
           )}
@@ -78,6 +82,8 @@ export function AssistantPage() {
         )}
       </div>
 
+      {memoryOpen && <MemoryDialog onClose={() => setMemoryOpen(false)} />}
+
       <aside className="ai-page__side">
         <section className="a-panel">
           <h2 className="a-h3">Що я вмію</h2>
@@ -87,6 +93,7 @@ export function AssistantPage() {
             <li>Підкажу, що робити з речами, які не продаються</li>
             <li>Поясню, як тут усе працює: фото, ціна, відправка</li>
             <li>Виставлю річ з фото: натисніть камеру біля поля вводу, додайте фото — і я підготую картку</li>
+            <li>Запам’ятаю ваші правила — ціни, де що лежить, як писати описи (кнопка «Пам’ять» угорі)</li>
           </ul>
         </section>
         {chat.actionsOn ? (

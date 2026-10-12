@@ -140,6 +140,11 @@ dotnet user-secrets set "OpenAI:ApiKey" "sk-..." --project src/SiteMym.Api
 - **«Заповнити з фото»** — `POST /api/admin/assistant/describe`: браузер зменшує фото (бірка — 512 px по короткій
   стороні, решта — 512 px), бірку модель роздивляється крупно, решту — дешево; відповідь — строгий JSON (structured outputs).
   ≈18 тис. токенів ≈ $0.003 за одну річ.
+- **Пам'ять** — таблиця `assistant_notes` (до 60 нотаток по 300 символів). Помічник сам записує сталі факти
+  («Reima ставлю від 300 грн», «зимове — в синю коробку») інструментами `remember`/`forget` у будь-якому режимі
+  (нотатки нічого не змінюють у магазині). Нотатки йдуть у кожну розмову окремим системним повідомленням одразу після
+  незмінного промпту, а також у «Заповнити з фото» — звідти підставляються ціна, «де лежить» і стиль опису.
+  Мама бачить і править їх: кнопка «Пам'ять» на сторінці «Помічник».
 - У логах API на кожен виклик: `OpenAI usage: prompt N (cached N), completion N tokens`.
 - Модель — `OpenAI:Model` (за замовчуванням `gpt-4o-mini`). Ліміт — 15 запитів на хвилину.
 - Без ключа кабінет працює, а помічник показує «ще не підключений».
@@ -161,6 +166,7 @@ dotnet user-secrets set "OpenAI:ApiKey" "sk-..." --project src/SiteMym.Api
 | GET | `/api/admin/orders?status=new`, `POST …/{number}/status {action: confirm\|ship\|complete\|cancel, trackingNumber}` | Замовлення |
 | GET/POST | `/api/admin/assistant` | Помічник: увімкнений? / питання `{messages:[{role,text}], context}` |
 | POST | `/api/admin/assistant/describe` | Заповнити картку з фото (multipart `files` ≤4, `tagIndex`) |
+| GET/POST/PUT/DELETE | `/api/admin/assistant/notes[/{id}] {text}` | Пам'ять помічника |
 | POST | `/api/admin/products/bulk {ids, action: hide\|discount10}` | Масові дії |
 | GET | `/api/admin/products/price-hint?category=hats` | Підказка ціни |
 | PUT | `/api/admin/orders/{number}/note {note}` | Нотатка для себе |

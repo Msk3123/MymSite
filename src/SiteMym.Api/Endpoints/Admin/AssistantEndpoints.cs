@@ -11,6 +11,8 @@ namespace SiteMym.Api.Endpoints.Admin;
 /// <param name="AllowActions">«Режим дій» увімкнено на фронті.</param>
 public sealed record AssistantRequest(AssistantMessage[] Messages, string? Context, bool AllowActions = false);
 
+public sealed record AssistantNoteRequest(string? Text);
+
 public sealed class AssistantEndpoints : IEndpoint
 {
     public void MapEndpoint(IEndpointRouteBuilder app)
@@ -58,5 +60,22 @@ public sealed class AssistantEndpoints : IEndpoint
         .WithMetadata(new RequestSizeLimitAttribute(4 * 12 * 1024 * 1024))
         .RequireRateLimiting(AdminAuth.AssistantRateLimit)
         .WithSummary("Заповнити картку речі з фото (multipart: files до 4, tagIndex — яке фото бірка)");
+
+        var notes = assistant.MapGroup("/notes");
+
+        notes.MapGet("/", async (IQueryHandler<GetAssistantNotesQuery, IReadOnlyList<AssistantNoteResponse>> handler, CancellationToken ct) =>
+            (await handler.Handle(new GetAssistantNotesQuery(), ct)).ToHttp())
+        .WithSummary("Що помічник пам'ятає про маму");
+
+        notes.MapPost("/", async (
+            AssistantNoteRequest request, ICommandHandler<AddAssistantNoteCommand, AssistantNoteResponse> handler, CancellationToken ct) =>
+            (await handler.Handle(new AddAssistantNoteCommand(request.Text), ct)).ToHttp());
+
+        notes.MapPut("/{id:guid}", async (
+            Guid id, AssistantNoteRequest request, ICommandHandler<UpdateAssistantNoteCommand, AssistantNoteResponse> handler, CancellationToken ct) =>
+            (await handler.Handle(new UpdateAssistantNoteCommand(id, request.Text), ct)).ToHttp());
+
+        notes.MapDelete("/{id:guid}", async (Guid id, ICommandHandler<DeleteAssistantNoteCommand, bool> handler, CancellationToken ct) =>
+            (await handler.Handle(new DeleteAssistantNoteCommand(id), ct)).ToHttp());
     }
 }

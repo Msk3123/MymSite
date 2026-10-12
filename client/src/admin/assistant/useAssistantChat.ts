@@ -31,8 +31,10 @@ export interface DraftItem {
   defectNote: string | null
   uncertain: string[]
   price: number | null
-  /** Звідки ціна: мама написала («за 200») чи підставили з подібних речей */
-  priceFrom?: 'text' | 'hint'
+  /** Звідки ціна: мама написала («за 200»), її правило з пам'яті помічника чи підставили з подібних речей */
+  priceFrom?: 'text' | 'memory' | 'hint'
+  /** «Де лежить» за маминим правилом з пам'яті */
+  storageLocation?: string | null
   thumbs: string[]
   state: 'pending' | 'busy' | 'done' | 'declined' | 'error' | 'expired'
   published?: boolean
@@ -48,6 +50,8 @@ export interface Bubble extends ChatMessage {
   draft?: DraftItem
   /** Речі, про які відповідь, — показуємо міні-картками */
   products?: AdminProductListItem[]
+  /** Що помічник записав у пам'ять цією відповіддю */
+  remembered?: string[]
 }
 
 const STORAGE_KEY = 'mamyna-shafa:assistant'
@@ -183,6 +187,7 @@ export function useAssistantChat(context: string, onDataChanged?: () => void) {
             text: reply.text,
             actions: reply.actions.map((action) => ({ action, state: 'pending' })),
             products: reply.products,
+            remembered: reply.remembered?.length ? reply.remembered : undefined,
           },
         ])
       } catch (err) {
@@ -238,9 +243,15 @@ export function useAssistantChat(context: string, onDataChanged?: () => void) {
         const forAi = await Promise.all(forSite.map((b) => shrinkForAi(b, true)))
         const s = await adminApi.describe(forAi, null)
 
+        // Ціна: що мама написала → її правило з пам'яті помічника → як у схожих речей.
         let price = priceFromText(text)
-        const priceFrom: DraftItem['priceFrom'] = price !== null ? 'text' : 'hint'
+        let priceFrom: DraftItem['priceFrom'] = 'text'
+        if (price === null && s.price) {
+          price = s.price
+          priceFrom = 'memory'
+        }
         if (price === null) {
+          priceFrom = 'hint'
           const { hint } = await adminApi.priceHint(s.category).catch(() => ({ hint: null }))
           price = hint ? Math.round((hint.min + hint.max) / 2 / 10) * 10 : null
         }
@@ -272,6 +283,7 @@ export function useAssistantChat(context: string, onDataChanged?: () => void) {
               uncertain: s.uncertain,
               price,
               priceFrom: price === null ? undefined : priceFrom,
+              storageLocation: s.storageLocation,
               thumbs,
               state: 'pending',
             },
@@ -315,7 +327,7 @@ export function useAssistantChat(context: string, onDataChanged?: () => void) {
           name: choice.name.trim(), title: null, brand: d.brand, gender: d.gender, category: d.category, season: d.season,
           condition: d.condition, sizeCm: choice.sizeCm, price: choice.price, oldPrice: null, description: d.description || null,
           sizeNote: d.sizeNote, seasonNote: null, composition: d.composition, insulation: d.insulation, fitNote: null,
-          defectNote: d.defectNote, lotContents: null, measurements: [], storageLocation: null,
+          defectNote: d.defectNote, lotContents: null, measurements: [], storageLocation: d.storageLocation ?? null,
         }
         let product = await adminApi.createProduct(input)
         for (const [i, blob] of photos.entries())

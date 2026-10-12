@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SiteMym.Application.Abstractions.Persistence;
+using SiteMym.Domain.Assistant;
 using SiteMym.Domain.Orders;
 using SiteMym.Domain.Products;
 
@@ -11,6 +12,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<AssistantNote> AssistantNotes => Set<AssistantNote>();
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken ct = default)
     {

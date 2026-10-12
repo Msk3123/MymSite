@@ -3,7 +3,9 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using SiteMym.Application.Abstractions.Ai;
 using SiteMym.Application.Abstractions.Messaging;
+using SiteMym.Application.Abstractions.Persistence;
 using SiteMym.Application.Products.Manage;
+using SiteMym.Domain.Assistant;
 using SiteMym.Domain.Common;
 using SiteMym.Domain.Products;
 
@@ -21,6 +23,8 @@ public sealed record DescribeProductCommand(IReadOnlyList<byte[]> Photos, int? T
 
 /// <param name="Uncertain">Поля, у яких модель не впевнена, — на формі вони підсвічуються «перевірте».</param>
 /// <param name="ConditionNote">Чому сумнів щодо стану: «бачу невеликий катишок на рукаві».</param>
+/// <param name="Price">Ціна за маминим правилом із пам'яті помічника («Reima від 300»); немає правила — null.</param>
+/// <param name="StorageLocation">«Де лежить» за маминим правилом із пам'яті («зимове — синя коробка»).</param>
 public sealed record ProductSuggestion(
     string Name,
     string? Brand,
@@ -35,9 +39,14 @@ public sealed record ProductSuggestion(
     string Description,
     string? DefectNote,
     string? ConditionNote,
-    IReadOnlyList<string> Uncertain);
+    IReadOnlyList<string> Uncertain,
+    int? Price = null,
+    string? StorageLocation = null);
 
-internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<DescribeProductCommandHandler> logger)
+internal sealed class DescribeProductCommandHandler(
+    IChatModel model,
+    IAssistantNoteRepository notes,
+    ILogger<DescribeProductCommandHandler> logger)
     : ICommandHandler<DescribeProductCommand, ProductSuggestion>
 {
     public static readonly Error NoPhotos = new("Assistant.NoPhotos", "Додайте хоча б одне фото речі");
@@ -70,6 +79,11 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
           (колір, тканина, стан). Без реклами («ідеально», «чудово», «стильний») і без вигаданих фактів
           (не пиши «носили один сезон», якщо цього не видно).
         - Стать: рожеве/сукні — girl, але якщо річ нейтральна — unisex і додай gender в uncertain.
+        - price і storageLocation — ТІЛЬКИ за її нотатками нижче. price — якщо є правило ціни для такого
+          бренду чи виду речі. storageLocation — якщо в нотатці сказано, куди вона кладе такі речі (за видом
+          речі чи сезоном): коротко назва місця з нотатки, з великої літери («Коробка 3», «Синя коробка»).
+          Немає підходящої нотатки — null, не вигадуй.
+        - Нотатки про стиль описів і назв теж враховуй.
         Пиши українською.
         """;
 
@@ -77,7 +91,7 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["name","brand","gender","category","season","condition","sizeCm","sizeNote","composition","insulation","description","defectNote","conditionNote","uncertain"],
+          "required": ["name","brand","gender","category","season","condition","sizeCm","sizeNote","composition","insulation","description","defectNote","conditionNote","uncertain","price","storageLocation"],
           "properties": {
             "name": { "type": "string" },
             "brand": { "type": ["string","null"] },
@@ -92,6 +106,8 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
             "description": { "type": "string" },
             "defectNote": { "type": ["string","null"] },
             "conditionNote": { "type": ["string","null"] },
+            "price": { "type": ["integer","null"] },
+            "storageLocation": { "type": ["string","null"] },
             "uncertain": { "type": "array", "items": { "type": "string",
               "enum": ["name","brand","gender","category","season","condition","sizeCm","composition"] } }
           }
@@ -122,7 +138,11 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
         try
         {
             completion = await model.CompleteAsync(
-                [ChatMessage.System(Prompt), ChatMessage.User("Заповни картку з цих фото.", images)],
+                [
+                    ChatMessage.System(Prompt),
+                    ChatMessage.System(NotesBlock(await notes.ListAsync(ct))),
+                    ChatMessage.User("Заповни картку з цих фото.", images)
+                ],
                 [],
                 new ChatJsonSchema("product_card", Schema),
                 ct);
@@ -183,6 +203,8 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
             Description = IsBlank(s.Description) ? string.Empty : s.Description.Trim(),
             DefectNote = IsBlank(s.DefectNote) ? null : s.DefectNote!.Trim(),
             ConditionNote = IsBlank(s.ConditionNote) ? null : s.ConditionNote!.Trim(),
+            Price = s.Price is > 0 and <= 100_000 ? s.Price : null,
+            StorageLocation = IsBlank(s.StorageLocation) ? null : s.StorageLocation!.Trim(),
             // Зріст поза межами магазину — краще порожньо, ніж неправда.
             SizeCm = s.SizeCm is >= Product.MinSizeCm and <= Product.MaxSizeCm ? s.SizeCm : null
         };
@@ -191,6 +213,11 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
 
         return cleaned with { Uncertain = uncertain.ToList() };
     }
+
+    private static string NotesBlock(IReadOnlyList<AssistantNote> list) =>
+        list.Count == 0
+            ? "Її нотаток немає."
+            : "Її нотатки (з пам'яті помічника):\n" + string.Join("\n", list.Select(n => "— " + n.Text));
 
     private static readonly HashSet<string> Placeholders = new(StringComparer.OrdinalIgnoreCase)
     {

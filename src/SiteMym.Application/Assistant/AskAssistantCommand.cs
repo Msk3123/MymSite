@@ -20,7 +20,12 @@ public sealed record AskAssistantCommand(IReadOnlyList<AssistantMessage> Message
 
 /// <param name="Actions">Підготовлені дії — фронт показує їх картками з кнопкою «Так».</param>
 /// <param name="Products">Речі, про які йдеться у відповіді, — фронт показує їх міні-картками з фото.</param>
-public sealed record AssistantReply(string Text, IReadOnlyList<AssistantAction> Actions, IReadOnlyList<AdminProductListItem> Products);
+/// <param name="Remembered">Що помічник щойно записав у пам'ять — фронт покаже «Запам'ятала: …».</param>
+public sealed record AssistantReply(
+    string Text,
+    IReadOnlyList<AssistantAction> Actions,
+    IReadOnlyList<AdminProductListItem> Products,
+    IReadOnlyList<string> Remembered);
 
 public static class AssistantErrors
 {
@@ -41,6 +46,7 @@ internal sealed class AskAssistantCommandHandler(
     IChatModel model,
     AssistantTools tools,
     AssistantActionTools actionTools,
+    AssistantMemory memory,
     IProductRepository products,
     ShopClock clock,
     IOptions<ShopSettings> shop,
@@ -71,7 +77,9 @@ internal sealed class AskAssistantCommandHandler(
         // Незмінна частина — першою (OpenAI кешує однаковий початок), час і «що на екрані» — в кінці.
         var messages = new List<ChatMessage>
         {
-            ChatMessage.System(AssistantPrompt.Static(settings.Name, settings.OwnerName, command.AllowActions))
+            ChatMessage.System(AssistantPrompt.Static(settings.Name, settings.OwnerName, command.AllowActions)),
+            // Пам'ять міняється рідко — одразу після незмінної частини, щоб кеш OpenAI захоплював і її.
+            ChatMessage.System(AssistantMemory.Format(await memory.LoadAsync(ct)))
         };
         messages.AddRange(command.Messages
             .TakeLast(MaxHistory)
@@ -80,9 +88,10 @@ internal sealed class AskAssistantCommandHandler(
         messages.Add(ChatMessage.System(AssistantPrompt.Now(clock.LocalNow, Truncate(command.Context, MaxContextLength))));
 
         // Інструменти змін моделі навіть не показуємо, поки «Режим дій» вимкнений.
+        // Пам'ять доступна в обох режимах: вона нічого не змінює в магазині.
         IReadOnlyList<ChatTool> toolset = command.AllowActions
-            ? [.. AssistantTools.Definitions, .. AssistantActionTools.Definitions]
-            : AssistantTools.Definitions;
+            ? [.. AssistantTools.Definitions, .. AssistantMemory.Definitions, .. AssistantActionTools.Definitions]
+            : [.. AssistantTools.Definitions, .. AssistantMemory.Definitions];
         var prepared = new List<AssistantAction>();
         var nudged = false;
         var toolCalls = 0;
@@ -123,7 +132,7 @@ internal sealed class AskAssistantCommandHandler(
                     var reply = text.Length > 0
                         ? text
                         : prepared.Count > 0 ? "Підготувала — перевірте й натисніть «Так»." : "Вибачте, не зрозумів питання. Спробуйте сказати інакше.";
-                    return new AssistantReply(reply, prepared, await MentionedProductsAsync(reply, prepared, ct));
+                    return new AssistantReply(reply, prepared, await MentionedProductsAsync(reply, prepared, ct), memory.Remembered);
                 }
 
                 messages.Add(ChatMessage.Assistant(completion.Content, completion.ToolCalls));
@@ -137,6 +146,10 @@ internal sealed class AskAssistantCommandHandler(
                         if (action is not null && prepared.Count < MaxActions)
                             prepared.Add(action);
                         messages.Add(ChatMessage.ToolResult(call.Id, forModel));
+                    }
+                    else if (AssistantMemory.Handles(call.Name))
+                    {
+                        messages.Add(ChatMessage.ToolResult(call.Id, await memory.ExecuteAsync(call, ct)));
                     }
                     else
                     {
