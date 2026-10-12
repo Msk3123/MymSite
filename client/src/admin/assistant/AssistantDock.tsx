@@ -44,10 +44,11 @@ export function AssistantDock() {
               messages={chat.messages}
               busy={chat.busy}
               onDecide={chat.decide}
+              onDraft={chat.decideDraft}
               intro={<div className="ai-bubble ai-bubble--assistant">Питайте простими словами — я бачу замовлення й речі і знаю, як тут усе влаштовано.</div>}
             />
           </div>
-          <AssistantInput hints={hintsFor(pathname)} busy={chat.busy} onAsk={chat.ask} />
+          <AssistantInput hints={hintsFor(pathname)} busy={chat.busy} onAsk={chat.ask} onPhotos={chat.askWithPhotos} />
         </section>
       )}
       <button type="button" className="ai-fab" aria-expanded={open} aria-label={open ? 'Сховати помічника' : 'Відкрити помічника'}

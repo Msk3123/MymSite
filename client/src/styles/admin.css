@@ -2449,3 +2449,146 @@ small.a-muted {
 .ai-page .ai-log__end {
   scroll-margin-bottom: 220px;
 }
+
+/* ---------- Нова річ з фото прямо в чаті ---------- */
+
+.ai-bubble__photos {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.ai-bubble__photos img {
+  width: 56px;
+  height: 70px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.ai-input__files {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-input__file {
+  position: relative;
+}
+
+.ai-input__file img {
+  width: 52px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+}
+
+.ai-input__file button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--ink);
+  color: #fff;
+  font: 800 14px/1 var(--font-display);
+  cursor: pointer;
+}
+
+.ai-input__files-hint {
+  flex: 1 1 160px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ai-draft {
+  align-self: flex-start;
+  width: min(100%, 440px);
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--sage-fill);
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-draft--done {
+  border-color: var(--sage-fill);
+  background: var(--sage);
+  box-shadow: none;
+}
+
+.ai-draft--off {
+  opacity: 0.65;
+  box-shadow: none;
+}
+
+.ai-draft__photos {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-draft__photos img {
+  width: 64px;
+  height: 80px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.ai-draft__field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-draft__field input {
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font: 600 16px var(--font-body);
+  color: var(--ink);
+}
+
+.ai-draft__field small {
+  min-height: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.ai-draft__check input {
+  background: var(--cream);
+  border-color: #dcc29a;
+}
+
+.ai-draft__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ai-draft__meta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ai-draft__desc {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.ai-draft .ai-action__buttons {
+  flex-wrap: wrap;
+}

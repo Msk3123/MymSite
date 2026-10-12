@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../../api/http'
-import { adminApi, type AdminProductListItem, type AssistantAction, type ChatMessage } from '../api'
+import type { Category, Condition, Gender, Season } from '../../data/catalog'
+import { adminApi, type AdminProductListItem, type AssistantAction, type ChatMessage, type ProductInput } from '../api'
+import { resizeImage, shrinkForAi } from '../resizeImage'
 import { notifyDataChanged } from '../ui'
 
 export type ActionState = 'pending' | 'busy' | 'done' | 'declined' | 'error'
@@ -12,9 +14,38 @@ export interface ActionCard {
   note?: string
 }
 
+/** Нова річ, яку помічник розпізнав з фото в чаті. Створюється лише після «Виставити на сайт» / «Чернетка». */
+export interface DraftItem {
+  id: string
+  name: string
+  brand: string | null
+  gender: Gender
+  category: Category
+  season: Season
+  condition: Condition
+  sizeCm: number | null
+  sizeNote: string | null
+  composition: string | null
+  insulation: string | null
+  description: string
+  defectNote: string | null
+  uncertain: string[]
+  price: number | null
+  /** Звідки ціна: мама написала («за 200») чи підставили з подібних речей */
+  priceFrom?: 'text' | 'hint'
+  thumbs: string[]
+  state: 'pending' | 'busy' | 'done' | 'declined' | 'error' | 'expired'
+  published?: boolean
+  productId?: string
+  note?: string
+}
+
 export interface Bubble extends ChatMessage {
   error?: boolean
   actions?: ActionCard[]
+  /** Мініатюри фото, які мама прикріпила до повідомлення */
+  photos?: string[]
+  draft?: DraftItem
   /** Речі, про які відповідь, — показуємо міні-картками */
   products?: AdminProductListItem[]
 }
@@ -52,8 +83,42 @@ const OUTCOME: Record<ActionState, string> = {
   error: 'не вдалося',
 }
 
+// Фото для нових речей тримаємо в пам'яті вкладки (у sessionStorage файли не влазять).
+const draftPhotos = new Map<string, Blob[]>()
+
+/** «…за 200», «200 грн», «ціна 350» → 200 / 350. Розмір («98 см») не плутаємо з ціною. */
+function priceFromText(text: string): number | null {
+  const m = text.match(/(?:за|ціна|ціну|по)\s*(\d{2,5})/i) ?? text.match(/(\d{2,5})\s*(?:грн|гривень|гривні|₴)/i)
+  return m ? Number(m[1]) : null
+}
+
+async function thumbnail(file: Blob) {
+  const small = await resizeImage(file, { maxSide: 160, quality: 0.7 })
+  return new Promise<string>((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => resolve('')
+    reader.readAsDataURL(small)
+  })
+}
+
+const DRAFT_OUTCOME: Record<DraftItem['state'], string> = {
+  pending: 'чекає її рішення',
+  busy: 'створюється',
+  done: 'створено',
+  declined: 'вона відмовилась',
+  error: 'не вдалося',
+  expired: 'фото загубились',
+}
+
 /** Для моделі: що сталося з підготовленими діями — щоб у наступній відповіді вона не плутала «зроблено» й «ні». */
 function forModel(b: Bubble): ChatMessage {
+  if (b.photos?.length) return { role: b.role, text: `${b.text} [прикріплено фото: ${b.photos.length}]` }
+  if (b.draft) {
+    const d = b.draft
+    const done = d.state === 'done' ? (d.published ? 'виставлено на сайт' : 'збережено чернеткою') : DRAFT_OUTCOME[d.state]
+    return { role: b.role, text: `${b.text}\n[Нова річ з фото «${d.name}», ${d.price ?? '?'} грн — ${done}]` }
+  }
   if (!b.actions?.length) return { role: b.role, text: b.text }
   const outcome = b.actions.map((a) => `«${a.action.summary}» — ${OUTCOME[a.state]}`).join('; ')
   return { role: b.role, text: `${b.text}\n[Дії: ${outcome}]` }
@@ -160,7 +225,117 @@ export function useAssistantChat(context: string, onDataChanged?: () => void) {
     [onDataChanged],
   )
 
+  /** Мама прикріпила фото: розпізнаємо річ і показуємо картку «Виставити на сайт». */
+  const askWithPhotos = useCallback(
+    async (text: string, files: File[]) => {
+      if (busy || files.length === 0) return
+      const list = files.slice(0, 4)
+      const thumbs = await Promise.all(list.map(thumbnail))
+      save([...load(), { role: 'user', text: text.trim() || 'Виклади цю річ', photos: thumbs }])
+      setBusy(true)
+      try {
+        const forSite = await Promise.all(list.map((f) => resizeImage(f)))
+        const forAi = await Promise.all(forSite.map((b) => shrinkForAi(b, true)))
+        const s = await adminApi.describe(forAi, null)
+
+        let price = priceFromText(text)
+        const priceFrom: DraftItem['priceFrom'] = price !== null ? 'text' : 'hint'
+        if (price === null) {
+          const { hint } = await adminApi.priceHint(s.category).catch(() => ({ hint: null }))
+          price = hint ? Math.round((hint.min + hint.max) / 2 / 10) * 10 : null
+        }
+
+        const id = crypto.randomUUID()
+        draftPhotos.set(id, forSite)
+        const missing = [!s.name && 'назву', !s.sizeCm && 'розмір', price === null && 'ціну'].filter(Boolean)
+        save([
+          ...load(),
+          {
+            role: 'assistant',
+            text: missing.length
+              ? `Ось що я побачила на фото. Допишіть ${missing.join(' і ')} й натисніть «Виставити на сайт».`
+              : 'Ось що я побачила на фото. Перевірте ціну й натисніть «Виставити на сайт».',
+            draft: {
+              id,
+              name: s.name,
+              brand: s.brand,
+              gender: s.gender,
+              category: s.category,
+              season: s.season,
+              condition: s.condition,
+              sizeCm: s.sizeCm,
+              sizeNote: s.sizeNote,
+              composition: s.composition,
+              insulation: s.insulation,
+              description: s.description,
+              defectNote: s.defectNote,
+              uncertain: s.uncertain,
+              price,
+              priceFrom: price === null ? undefined : priceFrom,
+              thumbs,
+              state: 'pending',
+            },
+          },
+        ])
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : 'Не вдалося розібрати фото. Спробуйте ще раз.'
+        save([...load(), { role: 'assistant', text: message, error: true }])
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy],
+  )
+
+  const updateDraft = (bubble: number, patch: Partial<DraftItem>) => {
+    const all = load()
+    if (!all[bubble]?.draft) return
+    all[bubble] = { ...all[bubble], draft: { ...all[bubble].draft!, ...patch } }
+    save(all)
+  }
+
+  /** «Виставити на сайт» / «Чернетка» / «Ні» на картці нової речі. */
+  const decideDraft = useCallback(
+    async (bubble: number, choice: { name: string; price: number; sizeCm: number; publish: boolean } | null) => {
+      const d = load()[bubble]?.draft
+      if (!d || d.state !== 'pending') return
+      if (!choice) {
+        updateDraft(bubble, { state: 'declined' })
+        draftPhotos.delete(d.id)
+        return
+      }
+      const photos = draftPhotos.get(d.id)
+      if (!photos) {
+        updateDraft(bubble, { state: 'expired', note: 'Сторінку оновили — фото загубились. Прикріпіть їх ще раз.' })
+        return
+      }
+      updateDraft(bubble, { state: 'busy' })
+      try {
+        const input: ProductInput = {
+          name: choice.name.trim(), title: null, brand: d.brand, gender: d.gender, category: d.category, season: d.season,
+          condition: d.condition, sizeCm: choice.sizeCm, price: choice.price, oldPrice: null, description: d.description || null,
+          sizeNote: d.sizeNote, seasonNote: null, composition: d.composition, insulation: d.insulation, fitNote: null,
+          defectNote: d.defectNote, lotContents: null, measurements: [], storageLocation: null,
+        }
+        let product = await adminApi.createProduct(input)
+        for (const [i, blob] of photos.entries())
+          product = await adminApi.uploadPhoto(product.id, blob, { caption: i === 0 ? 'Вигляд' : undefined })
+        if (choice.publish) product = await adminApi.productStatus(product.id, 'publish')
+        draftPhotos.delete(d.id)
+        updateDraft(bubble, {
+          state: 'done', published: choice.publish, productId: product.id, name: choice.name, price: choice.price,
+          sizeCm: choice.sizeCm, note: `${product.sku}`,
+        })
+        notifyDataChanged()
+        onDataChanged?.()
+      } catch (err) {
+        updateDraft(bubble, { state: 'pending', note: err instanceof ApiError ? err.message : 'Не вдалося. Спробуйте ще раз.' })
+      }
+    },
+    [onDataChanged],
+  )
+
   const reset = useCallback(() => save([]), [])
 
-  return { messages, busy, ask, decide, reset, actionsOn }
+  return { messages, busy, ask, askWithPhotos, decide, decideDraft, reset, actionsOn }
 }

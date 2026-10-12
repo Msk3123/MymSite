@@ -1,5 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom'
-import { CameraIcon, SparkleIcon } from '../../components/Icons'
+import { Link } from 'react-router-dom'
+import { SparkleIcon } from '../../components/Icons'
 import { formatPrice, plural } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
 import { adminApi } from '../api'
@@ -31,7 +31,6 @@ function Briefing() {
 }
 
 export function AssistantPage() {
-  const navigate = useNavigate()
   const { assistantContext, refreshSummary } = useAdmin()
   useAssistantContext('сторінка помічника')
   const { data: status } = useAsync('assistant-status', adminApi.assistantEnabled)
@@ -62,7 +61,7 @@ export function AssistantPage() {
           <>
             <div className="ai-page__log">
               <Briefing />
-              <AssistantLog messages={chat.messages} busy={chat.busy} onDecide={chat.decide} />
+              <AssistantLog messages={chat.messages} busy={chat.busy} onDecide={chat.decide} onDraft={chat.decideDraft} />
             </div>
             <AssistantInput large hints={HINTS} busy={chat.busy} onAsk={chat.ask} placeholder="Запитайте або попросіть щось зробити…"
               toolbar={
@@ -74,12 +73,7 @@ export function AssistantPage() {
                   </span>
                 </>
               }
-              before={
-                <button type="button" className="ai-input__mic" aria-label="Нова річ з фото — помічник заповнить картку"
-                  title="Нова річ з фото" onClick={() => navigate('/admin/products/new')}>
-                  <CameraIcon />
-                </button>
-              } />
+              onPhotos={chat.askWithPhotos} />
           </>
         )}
       </div>
@@ -92,7 +86,7 @@ export function AssistantPage() {
             <li>Знайду річ і скажу, де вона лежить</li>
             <li>Підкажу, що робити з речами, які не продаються</li>
             <li>Поясню, як тут усе працює: фото, ціна, відправка</li>
-            <li>Заповню картку речі з фото — кнопка з камерою</li>
+            <li>Виставлю річ з фото: натисніть камеру біля поля вводу, додайте фото — і я підготую картку</li>
           </ul>
         </section>
         {chat.actionsOn ? (
