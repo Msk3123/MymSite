@@ -17,3 +17,7 @@ uploads/
 # локальні секрети (пароль кабінету тощо) — ніколи не в git
 secrets/
 .env
+
+# «живий» запуск на цьому комп'ютері (deploy/start-live.ps1)
+publish/
+data/

@@ -145,6 +145,8 @@ export function HomePage() {
           </div>
         </section>
 
+        {/* Порожній магазин (щойно запущений) — не показуємо порожні блоки. */}
+        {(!home || home.seasonItems.length > 0) && (
         <section className="section section--bleed" aria-labelledby="season-h">
           <div className="section__head section__head--row">
             <h2 id="season-h" className="section__title">Зараз в сезоні</h2>
@@ -159,7 +161,9 @@ export function HomePage() {
             ))}
           </div>
         </section>
+        )}
 
+        {(!home || home.lots.length > 0) && (
         <section className="section" aria-labelledby="lots-h">
           <div className="section__head section__head--stack">
             <h2 id="lots-h" className="section__title">Комплекти та лоти</h2>
@@ -171,6 +175,7 @@ export function HomePage() {
             ))}
           </div>
         </section>
+        )}
 
         <div className="trust-row">
           <section className="trust" aria-labelledby="trust-h">

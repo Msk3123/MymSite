@@ -56,6 +56,24 @@ npm install
 npm run dev
 ```
 
+## Живий сайт з цього комп'ютера (безкоштовно, тимчасово)
+
+Поки немає сервера, сайт можна відкрити в інтернет прямо з цього ПК через [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) — без реєстрації, з HTTPS:
+
+```powershell
+winget install --id Cloudflare.cloudflared          # один раз
+powershell -ExecutionPolicy Bypass -File deploy\start-live.ps1
+```
+
+Скрипт збирає сайт, публікує API (Release) і запускає все одним процесом на `http://localhost:5200`, а потім друкує
+адресу виду `https://….trycloudflare.com` — її й даємо мамі (кабінет: `…/admin`).
+
+- Окремо від розробки: база `mamyna_shafa_live`, фото в `data/uploads`, тестових речей немає.
+- Пароль кабінету — у `secrets/admin-password.txt` (папка не потрапляє в git), логін `mama`.
+  Новий пароль: `dotnet run --project src/SiteMym.Api -- hash-password "пароль" > secrets/admin-password-hash.txt`.
+- Обмеження: працює, поки увімкнений ПК і відкрите вікно скрипта; **адреса змінюється при кожному запуску**.
+- Переїзд на сервер: `pg_dump mamyna_shafa_live` + папка `data/uploads` — і все, що мама додала, переїде.
+
 ## Кабінет продавчині (`/admin`) — макет «Версія 2.0»
 
 Вхід — логін і пароль. Адмін один, тому без таблиці користувачів: логін і **хеш** пароля лежать у конфігурації.

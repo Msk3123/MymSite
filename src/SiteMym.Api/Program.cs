@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
@@ -23,6 +24,18 @@ if (args is ["hash-password", var plainPassword])
 const string ClientCorsPolicy = "client";
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (!builder.Environment.IsDevelopment())
+{
+    // Запуск «на бою» на власному комп'ютері: ключ OpenAI лежить у user-secrets (Development їх підключає сам).
+    // Змінні оточення додаємо ще раз, щоб вони мали перевагу над секретами.
+    builder.Configuration.AddUserSecrets<Program>(optional: true);
+    builder.Configuration.AddEnvironmentVariables();
+}
+
+// Сайт стоїть за проксі (Cloudflare Tunnel / Caddy): справжні IP покупців і https беремо із заголовків.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
 
 builder.Services.Configure<ShopSettings>(builder.Configuration.GetSection(ShopSettings.SectionName));
 
@@ -65,12 +78,18 @@ builder.Services.AddCors(options => options.AddPolicy(ClientCorsPolicy, policy =
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     await app.Services.PrepareDevelopmentDatabaseAsync();
+}
+else
+{
+    // На бою — лише міграції, без тестових речей.
+    await app.Services.MigrateDatabaseAsync();
 }
 
 if (string.IsNullOrEmpty(app.Services.GetRequiredService<IOptions<AdminOptions>>().Value.PasswordHash))
@@ -93,5 +112,38 @@ app.UseRateLimiter();
 
 app.MapHealthChecks("/api/health", new() { ResponseWriter = HealthResponse.WriteAsync });
 app.MapEndpoints();
+
+// Один процес на все: якщо задано Client:DistPath (зібраний React), API роздає й сайт.
+// У розробці фронт крутиться на Vite (localhost:5173), і цей блок не потрібен.
+if (app.Configuration["Client:DistPath"] is { Length: > 0 } distSetting)
+{
+    var dist = Path.GetFullPath(distSetting, app.Environment.ContentRootPath);
+    if (File.Exists(Path.Combine(dist, "index.html")))
+    {
+        var files = new PhysicalFileProvider(dist);
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = files,
+            // Файли з хешем в імені (assets/index-abc123.js) не змінюються — кешуємо назавжди.
+            OnPrepareResponse = ctx =>
+            {
+                if (ctx.Context.Request.Path.StartsWithSegments("/assets"))
+                    ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            }
+        });
+        // Невідомий /api/… — це 404, а не сторінка сайту.
+        app.Map("/api/{**rest}", () => Results.NotFound());
+        // Будь-яка інша адреса (/catalog, /admin/orders/1001) — це маршрут React.
+        app.MapFallbackToFile("index.html", new StaticFileOptions
+        {
+            FileProvider = files,
+            OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+        });
+    }
+    else
+    {
+        app.Logger.LogWarning("Client:DistPath {Path} has no index.html — run `npm run build` in client/", dist);
+    }
+}
 
 app.Run();

@@ -50,6 +50,13 @@ public static class DependencyInjection
         return services;
     }
 
+    /// <summary>Накатує міграції. Для одного сервера найпростіше робити це при старті.</summary>
+    public static async Task MigrateDatabaseAsync(this IServiceProvider services)
+    {
+        await using var scope = services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    }
+
     /// <summary>Накатує міграції й заповнює порожню базу тестовими речами. Лише для Development.</summary>
     public static async Task PrepareDevelopmentDatabaseAsync(this IServiceProvider services)
     {
