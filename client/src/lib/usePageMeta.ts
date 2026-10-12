@@ -47,7 +47,7 @@ export function usePageMeta({ title, description, noindex, jsonLd, image }: Page
   const ld = jsonLd ? JSON.stringify(jsonLd) : ''
 
   useEffect(() => {
-    const full = title === SITE ? title : `${title} | ${SITE}`
+    const full = title.startsWith(SITE) ? title : `${title} | ${SITE}`
     document.title = full
     setMeta('name', 'description', description)
     setMeta('property', 'og:title', full)

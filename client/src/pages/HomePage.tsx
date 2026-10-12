@@ -77,7 +77,7 @@ const countLabel = (n?: number) => (n === undefined ? '\u00a0' : itemsCount(n))
 export function HomePage() {
   usePageMeta({
     title: 'Мамина шафа — дитячий одяг б/у і нові речі від 0 до 10 років',
-    description: `Перевірені дитячі речі від ${SHOP.owner} з ${SHOP.city}: куртки, комбінезони, сукні, взуття. Фільтр за зростом, чесні фото дефектів, доставка Новою Поштою за 1–2 дні.`,
+    description: `Перевірені дитячі речі від 0 до 10 років: куртки, комбінезони, сукні, взуття. Фільтр за зростом, чесні фото дефектів, доставка Новою Поштою за 1–2 дні. Продавчиня — ${SHOP.owner}, ${SHOP.city}.`,
     jsonLd: {
       '@context': 'https://schema.org',
       '@type': 'Store',
