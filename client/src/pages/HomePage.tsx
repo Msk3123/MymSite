@@ -2,12 +2,14 @@ import { Link } from 'react-router-dom'
 import { GarmentArt } from '../components/GarmentArt'
 import { ArrowRightIcon, CameraIcon, DropIcon, SunIcon } from '../components/Icons'
 import { LotCard, ProductCard } from '../components/ProductCard'
+import { OwnerAvatar } from '../components/OwnerAvatar'
 import { MobileHeader } from '../components/SiteHeader'
 import { SHOP } from '../config'
 import { countProducts, fetchProducts } from '../api/products'
 import { REVIEWS, SIZES, type Gender } from '../data/catalog'
 import { catalogUrl } from '../lib/filters'
 import { itemsCount } from '../lib/format'
+import { usePageMeta } from '../lib/usePageMeta'
 import { useAsync } from '../lib/useAsync'
 
 const GENDER_KEYS: Gender[] = ['boy', 'girl', 'unisex']
@@ -73,6 +75,21 @@ const STEPS = [
 const countLabel = (n?: number) => (n === undefined ? '\u00a0' : itemsCount(n))
 
 export function HomePage() {
+  usePageMeta({
+    title: 'Мамина шафа — дитячий одяг б/у і нові речі від 0 до 10 років',
+    description: `Перевірені дитячі речі від ${SHOP.owner} з ${SHOP.city}: куртки, комбінезони, сукні, взуття. Фільтр за зростом, чесні фото дефектів, доставка Новою Поштою за 1–2 дні.`,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Store',
+      name: SHOP.name,
+      description: 'Вживаний і новий дитячий одяг від 0 до 10 років',
+      url: location.origin,
+      image: `${location.origin}/og.png`,
+      telephone: SHOP.phone,
+      address: { '@type': 'PostalAddress', addressLocality: SHOP.city, addressCountry: 'UA' },
+      priceRange: '₴',
+    },
+  })
   const { data: home } = useAsync('home', loadHome)
   const { minItems, percent } = SHOP.bulkDiscount
   const discount = `Від ${minItems} речей — знижка ${percent}%`
@@ -195,7 +212,7 @@ export function HomePage() {
 
           <section id="about" className="about" aria-labelledby="about-h">
             <div className="about__head">
-              <div role="img" aria-label="Місце для фото продавчині" className="about__photo">ФОТО<br />ОКСАНИ</div>
+              <OwnerAvatar className="about__photo" label={`${SHOP.owner}, продавчиня`} />
               <div>
                 <h2 id="about-h" className="section__title">Привіт, я {SHOP.owner}</h2>
                 <span className="about__who">мама двох дітей · {SHOP.city}</span>

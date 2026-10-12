@@ -92,6 +92,10 @@ export function AdminApp() {
 
   useEffect(() => {
     document.title = 'Кабінет — Мамина шафа'
+    const robots = document.createElement('meta')
+    robots.name = 'robots'
+    robots.content = 'noindex, nofollow'
+    document.head.appendChild(robots)
     adminApi.me().then(setMe, () => setMe(null))
     const onUnauthorized = () => setMe(null)
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized)

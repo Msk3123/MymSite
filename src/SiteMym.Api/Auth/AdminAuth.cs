@@ -67,8 +67,9 @@ public static class AdminAuth
                 // Strict: кука не їде з чужих сайтів — це й захист від CSRF для форм і завантаження фото.
                 options.Cookie.SameSite = SameSiteMode.Strict;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-                // Мама не має щодня вводити пароль: місяць, і термін подовжується, поки вона заходить.
-                options.ExpireTimeSpan = TimeSpan.FromDays(30);
+                // Мама не має вводити пароль: пів року, і термін подовжується щоразу, коли вона заходить.
+                // Тобто поки вона хоч раз на пів року відкриває кабінет — пароль більше не спитають.
+                options.ExpireTimeSpan = TimeSpan.FromDays(180);
                 options.SlidingExpiration = true;
                 // Це API — замість редіректу на сторінку входу віддаємо 401/403, а фронт сам покаже форму.
                 options.Events.OnRedirectToLogin = ctx =>

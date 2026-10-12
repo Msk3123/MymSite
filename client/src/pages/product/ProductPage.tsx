@@ -10,6 +10,7 @@ import { LoadError } from '../../components/LoadError'
 import { CATEGORIES, CONDITIONS, GENDERS, SEASONS, sizeInfo, type Product } from '../../data/catalog'
 import { catalogUrl } from '../../lib/filters'
 import { discountPercent, formatPrice, itemsCount } from '../../lib/format'
+import { usePageMeta } from '../../lib/usePageMeta'
 import { useAsync } from '../../lib/useAsync'
 import { NotFoundPage } from '../NotFoundPage'
 import { ProductGallery } from './ProductGallery'
@@ -141,6 +142,31 @@ function ProductView({ product: p }: { product: Product }) {
   const telegramWithText = `${SHOP.telegramUrl}?text=${encodeURIComponent(message)}`
   const sizeLabel = p.sizeNote ?? `${p.size} см`
   const back = catalogUrl({ gender: p.gender === 'unisex' ? undefined : p.gender, size: p.size })
+
+  // Заголовок, опис і розмітка товару: так у Google може з'явитись ціна й «в наявності».
+  usePageMeta({
+    title: `${p.title}${p.brand ? ` ${p.brand}` : ''}, ${sizeLabel} — ${formatPrice(p.price)}`,
+    description: `${CONDITIONS[p.condition].label}. ${p.description ?? ''} ${GENDERS[p.gender].title}, ${sizeLabel}${size ? ` (${size.ageLong})` : ''}. Доставка Новою Поштою.`
+      .replace(/\s+/g, ' ').trim().slice(0, 300),
+    image: p.coverUrl,
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: p.title,
+      sku: p.sku,
+      description: p.description,
+      image: (p.photos?.length ? p.photos.map((ph) => ph.url) : p.coverUrl ? [p.coverUrl] : []).map((u) => new URL(u, location.origin).href),
+      ...(p.brand && p.brand !== 'Різні бренди' ? { brand: { '@type': 'Brand', name: p.brand } } : {}),
+      offers: {
+        '@type': 'Offer',
+        url: location.href,
+        priceCurrency: 'UAH',
+        price: p.price,
+        availability: p.sold ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
+        itemCondition: p.condition === 'new' ? 'https://schema.org/NewCondition' : 'https://schema.org/UsedCondition',
+      },
+    },
+  })
 
   return (
     <>

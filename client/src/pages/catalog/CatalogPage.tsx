@@ -18,6 +18,7 @@ import {
   type SortKey,
 } from '../../lib/filters'
 import { itemsCount } from '../../lib/format'
+import { usePageMeta } from '../../lib/usePageMeta'
 import { useAsync } from '../../lib/useAsync'
 import { FiltersPanel } from './FiltersPanel'
 import { FiltersSheet } from './FiltersSheet'
@@ -134,6 +135,10 @@ export function CatalogPage() {
 
   const age = filters.size ? sizeInfo(filters.size)?.ageLong : undefined
   const title = filters.q && !filters.gender && !filters.size && !filters.category ? `Пошук: «${filters.q}»` : describe(filters)
+  usePageMeta({
+    title: filters.q ? `Пошук «${filters.q}» — дитячі речі` : title === 'Каталог' ? 'Каталог дитячих речей' : `${title} — дитячі речі`,
+    description: `${title === 'Каталог' ? 'Усі дитячі речі' : title}${age ? ` (${age})` : ''}: вживаний і новий дитячий одяг з фото й чесним описом стану. Доставка Новою Поштою.`,
+  })
   const shown = data?.items ?? []
   const total = data?.total
   const rest = (total ?? 0) - shown.length

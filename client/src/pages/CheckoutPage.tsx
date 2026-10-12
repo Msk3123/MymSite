@@ -10,6 +10,7 @@ import { SHOP } from '../config'
 import { CONDITIONS } from '../data/catalog'
 import { formatPrice, itemsCount, plural } from '../lib/format'
 import { artFor } from '../lib/placeholderArt'
+import { usePageMeta } from '../lib/usePageMeta'
 
 type Payment = 'card' | 'cod'
 
@@ -91,6 +92,7 @@ function droppedNote(names: string[]) {
 }
 
 export function CheckoutPage() {
+  usePageMeta({ title: 'Оформлення замовлення', noindex: true })
   const cart = useCart()
   const [form, setForm] = useState<OrderForm>(EMPTY_FORM)
   const [errors, setErrors] = useState<Errors>({})

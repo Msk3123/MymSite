@@ -131,6 +131,7 @@ app.UseRateLimiter();
 
 app.MapHealthChecks("/api/health", new() { ResponseWriter = HealthResponse.WriteAsync });
 app.MapEndpoints();
+app.MapSeo();
 
 // Один процес на все: якщо задано Client:DistPath (зібраний React), API роздає й сайт.
 // У розробці фронт крутиться на Vite (localhost:5173), і цей блок не потрібен.

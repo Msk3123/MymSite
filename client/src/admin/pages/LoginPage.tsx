@@ -39,7 +39,7 @@ export function LoginPage({ onLogin }: { onLogin: (me: Me) => void }) {
         <button type="submit" className="btn btn--primary btn--lg btn--block" disabled={busy}>
           {busy ? 'Входжу…' : 'Увійти'}
         </button>
-        <p className="a-hint">Телефон запам’ятає вхід на місяць.</p>
+        <p className="a-hint">Телефон запам’ятає вхід — пароль більше не спитає, поки ви заходите хоча б раз на пів року.</p>
       </form>
     </div>
   )

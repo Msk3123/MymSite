@@ -373,15 +373,10 @@
 
 .about__photo {
   flex: 0 0 88px;
+  width: 88px;
   height: 88px;
   border-radius: 999px;
-  border: 2px dashed var(--rose-fill);
-  background: var(--rose);
-  display: grid;
-  place-items: center;
-  font: 700 11px/14px var(--font-body);
-  color: var(--rose-ink);
-  text-align: center;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--rose-fill);
 }
 
 .about__who {
@@ -674,6 +669,7 @@
 
   .about__photo {
     flex-basis: 96px;
+    width: 96px;
     height: 96px;
   }
 

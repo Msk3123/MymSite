@@ -1,7 +1,9 @@
+import { usePageMeta } from '../lib/usePageMeta'
 import { Link } from 'react-router-dom'
 import { MobileHeader } from '../components/SiteHeader'
 
 export function NotFoundPage() {
+  usePageMeta({ title: 'Такої сторінки немає', noindex: true })
   return (
     <>
       <MobileHeader brand cart />
