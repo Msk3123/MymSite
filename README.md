@@ -56,6 +56,24 @@ npm install
 npm run dev
 ```
 
+## Сервер (бойовий сайт)
+
+**https://shafa.134-209-235-187.sslip.io** · кабінет `/admin` · DigitalOcean (Frankfurt, 2 GB, Ubuntu 24.04).
+
+```bash
+bash deploy/deploy.sh      # викласти останній коміт: збірка на сервері + перезапуск (~1–3 хв)
+ssh shafa-server           # зайти на сервер (ключ ~/.ssh/hetzner_ed25519, див. ~/.ssh/config)
+ssh shafa-server 'cd /opt/sites && docker compose logs --tail 100 shafa'   # логи
+```
+
+- `/opt/sites`: `docker-compose.yml` + `Caddyfile` (з `deploy/server`), `.env` із секретами (лише на сервері, `chmod 600`),
+  код у `/opt/sites/shafa`. Сервіси: `db` (PostgreSQL 17, одна на всі сайти), `shafa`, `caddy` (HTTPS від Let's Encrypt).
+- Фото й ключі входу — у томі `sites_shafa-data`, база — `sites_pgdata`.
+- Бекап щоночі о 03:30 (Київ): `/opt/backups`, 14 днів (`deploy/server/backup.sh`). Він на тому ж сервері —
+  для захисту від втрати самого сервера варто ввімкнути Backups у панелі DigitalOcean.
+- Firewall: відкриті лише 22, 80, 443. Swap 2 ГБ. Автооновлення безпеки Ubuntu.
+- Другий сайт: ще один сервіс у `docker-compose.yml` + блок у `Caddyfile` (місце вже підготовлене).
+
 ## Живий сайт з цього комп'ютера (безкоштовно, тимчасово)
 
 Поки немає сервера, сайт можна відкрити в інтернет прямо з цього ПК через [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) — без реєстрації, з HTTPS:
