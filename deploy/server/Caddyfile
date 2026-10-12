@@ -1,0 +1,16 @@
+# Caddy сам отримує й оновлює HTTPS-сертифікати (Let's Encrypt) для кожного домену.
+
+{$SHAFA_DOMAIN} {
+	encode zstd gzip
+	# Фото з телефона — до 12 МБ (API все одно перевіряє розмір).
+	request_body {
+		max_size 50MB
+	}
+	reverse_proxy shafa:8080
+}
+
+# Другий сайт (Таро) — додамо сюди:
+# {$TARO_DOMAIN} {
+# 	encode zstd gzip
+# 	reverse_proxy taro:8080
+# }

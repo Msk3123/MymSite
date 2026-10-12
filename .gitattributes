@@ -1,0 +1,5 @@
+# Скрипти для Linux-сервера — завжди з LF, інакше bash спіткнеться об символ CR
+*.sh text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf
+*.yml text eol=lf

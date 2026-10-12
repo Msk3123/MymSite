@@ -1,0 +1,62 @@
+# Сервер з сайтами (DigitalOcean, /opt/sites). Розкладка на сервері:
+#   /opt/sites/docker-compose.yml   ← цей файл
+#   /opt/sites/Caddyfile
+#   /opt/sites/.env                 ← секрети (не в git!), див. .env.example
+#   /opt/sites/shafa/               ← код «Маминої шафи» (deploy/deploy.sh)
+#
+# Одна PostgreSQL на всі сайти (кожен — своя база): економить пам'ять на маленькому сервері.
+# Другий сайт додається ще одним сервісом + блоком у Caddyfile.
+
+name: sites
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте в .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Порт назовні не відкриваємо — база доступна лише сайтам.
+
+  shafa:
+    build: ./shafa
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Database: Host=db;Port=5432;Database=mamyna_shafa;Username=postgres;Password=${POSTGRES_PASSWORD}
+      Admin__PasswordHash: ${SHAFA_ADMIN_PASSWORD_HASH:?задайте в .env}
+      OpenAI__ApiKey: ${OPENAI_API_KEY:-}
+    volumes:
+      - shafa-data:/data
+    mem_limit: 512m
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SHAFA_DOMAIN: ${SHAFA_DOMAIN:?задайте в .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - shafa
+
+volumes:
+  pgdata:
+  shafa-data:
+  caddy-data:
+  caddy-config:

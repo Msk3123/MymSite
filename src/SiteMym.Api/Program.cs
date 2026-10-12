@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.FileProviders;
@@ -35,7 +36,25 @@ if (!builder.Environment.IsDevelopment())
 
 // Сайт стоїть за проксі (Cloudflare Tunnel / Caddy): справжні IP покупців і https беремо із заголовків.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // У Docker проксі (Caddy) — інший контейнер, не localhost. Довіряємо йому, лише коли це явно ввімкнено:
+    // порт застосунку назовні не відкритий, достукатися до нього можна тільки через Caddy.
+    if (builder.Configuration.GetValue<bool>("ForwardedHeaders:TrustAllProxies"))
+    {
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+    }
+});
+
+// Ключі, якими підписана кука входу. У контейнері без цього вони б зникали з кожним оновленням,
+// і мамі довелося б знову вводити пароль.
+if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("mamyna-shafa")
+        .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+}
 
 builder.Services.Configure<ShopSettings>(builder.Configuration.GetSection(ShopSettings.SectionName));
 

@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/node_modules/
+client/dist/
+publish/
+data/
+secrets/
+uploads/
+src/SiteMym.Api/uploads/
+.git/
+.idea/
+.vs/
+*.user
+*.tsbuildinfo
+*.html
+!client/index.html
