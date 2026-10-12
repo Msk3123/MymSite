@@ -48,7 +48,6 @@ export function AssistantPage() {
               {chat.actionsOn ? 'Режим дій: готує зміни, виконує після вашого «Так».' : 'Підказує й відповідає. Змінюєте все ви.'}
             </span>
           </div>
-          <ActionModeSwitch />
           {chat.messages.length > 0 && (
             <button type="button" className="a-link-btn" disabled={chat.busy} onClick={chat.reset}>Почати заново</button>
           )}
@@ -66,6 +65,15 @@ export function AssistantPage() {
               <AssistantLog messages={chat.messages} busy={chat.busy} onDecide={chat.decide} />
             </div>
             <AssistantInput large hints={HINTS} busy={chat.busy} onAsk={chat.ask} placeholder="Запитайте або попросіть щось зробити…"
+              toolbar={
+                <>
+                  <span className="ai-input__mode-label">Режим помічника:</span>
+                  <ActionModeSwitch />
+                  <span className="ai-input__mode-hint">
+                    {chat.actionsOn ? 'готує зміни — ви підтверджуєте «Так»' : 'лише підказує, нічого не змінює'}
+                  </span>
+                </>
+              }
               before={
                 <button type="button" className="ai-input__mic" aria-label="Нова річ з фото — помічник заповнить картку"
                   title="Нова річ з фото" onClick={() => navigate('/admin/products/new')}>
@@ -95,7 +103,7 @@ export function AssistantPage() {
               <li>помічник покаже картку — нічого не зміниться, поки ви не натиснете «Так»</li>
               <li>видалення — червона кнопка, повернути не можна</li>
             </ul>
-            <small className="a-muted">Вимкнути — кнопка «Поради» вгорі.</small>
+            <small className="a-muted">Вимкнути — «Поради» внизу біля поля вводу.</small>
           </section>
         ) : (
           <section className="a-panel a-panel--green">

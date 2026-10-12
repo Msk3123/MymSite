@@ -3,7 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SiteMym.Application.Abstractions.Ai;
 using SiteMym.Application.Abstractions.Messaging;
+using SiteMym.Application.Abstractions.Persistence;
 using SiteMym.Application.Common;
+using SiteMym.Application.Products;
 using SiteMym.Domain.Common;
 
 namespace SiteMym.Application.Assistant;
@@ -17,7 +19,8 @@ public sealed record AskAssistantCommand(IReadOnlyList<AssistantMessage> Message
     : ICommand<AssistantReply>;
 
 /// <param name="Actions">Підготовлені дії — фронт показує їх картками з кнопкою «Так».</param>
-public sealed record AssistantReply(string Text, IReadOnlyList<AssistantAction> Actions);
+/// <param name="Products">Речі, про які йдеться у відповіді, — фронт показує їх міні-картками з фото.</param>
+public sealed record AssistantReply(string Text, IReadOnlyList<AssistantAction> Actions, IReadOnlyList<AdminProductListItem> Products);
 
 public static class AssistantErrors
 {
@@ -38,6 +41,7 @@ internal sealed class AskAssistantCommandHandler(
     IChatModel model,
     AssistantTools tools,
     AssistantActionTools actionTools,
+    IProductRepository products,
     ShopClock clock,
     IOptions<ShopSettings> shop,
     ILogger<AskAssistantCommandHandler> logger) : ICommandHandler<AskAssistantCommand, AssistantReply>
@@ -50,6 +54,7 @@ internal sealed class AskAssistantCommandHandler(
     private const int MaxToolRounds = 4;
     private const int MaxContextLength = 200;
     private const int MaxActions = 10;
+    private const int MaxProductCards = 6;
 
     public async Task<Result<AssistantReply>> Handle(AskAssistantCommand command, CancellationToken ct)
     {
@@ -115,10 +120,10 @@ internal sealed class AskAssistantCommandHandler(
                         continue;
                     }
 
-                    return new AssistantReply(text.Length > 0
+                    var reply = text.Length > 0
                         ? text
-                        : prepared.Count > 0 ? "Підготувала — перевірте й натисніть «Так»." : "Вибачте, не зрозумів питання. Спробуйте сказати інакше.",
-                        prepared);
+                        : prepared.Count > 0 ? "Підготувала — перевірте й натисніть «Так»." : "Вибачте, не зрозумів питання. Спробуйте сказати інакше.";
+                    return new AssistantReply(reply, prepared, await MentionedProductsAsync(reply, prepared, ct));
                 }
 
                 messages.Add(ChatMessage.Assistant(completion.Content, completion.ToolCalls));
@@ -152,6 +157,37 @@ internal sealed class AskAssistantCommandHandler(
         }
 
         return Result.Failure<AssistantReply>(AssistantErrors.Unavailable);
+    }
+
+    /// <summary>
+    /// Які речі показати картками: ті, що модель знайшла й назвала у відповіді (за назвою чи артикулом),
+    /// плюс ті, для яких готує дію. Щоб не засипати чат — не більше шести.
+    /// </summary>
+    private async Task<IReadOnlyList<AdminProductListItem>> MentionedProductsAsync(
+        string text, IReadOnlyList<AssistantAction> prepared, CancellationToken ct)
+    {
+        var shown = new List<AdminProductListItem>();
+        void Add(AdminProductListItem p)
+        {
+            if (shown.Count < MaxProductCards && shown.All(x => x.Id != p.Id))
+                shown.Add(p);
+        }
+
+        foreach (var sku in prepared.Select(a => a.Sku).OfType<string>())
+        {
+            if (tools.Found.FirstOrDefault(p => p.Sku == sku) is { } found)
+                Add(found);
+            else if (await products.GetBySkuAsync(sku, ct) is { } product)
+                Add(product.ToAdminListItem());
+        }
+
+        foreach (var p in tools.Found)
+        {
+            if (text.Contains(p.Sku, StringComparison.OrdinalIgnoreCase) || text.Contains(p.Name, StringComparison.OrdinalIgnoreCase))
+                Add(p);
+        }
+
+        return shown;
     }
 
     private static bool ClaimsPrepared(string text) =>

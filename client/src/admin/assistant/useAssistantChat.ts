@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError } from '../../api/http'
-import { adminApi, type AssistantAction, type ChatMessage } from '../api'
+import { adminApi, type AdminProductListItem, type AssistantAction, type ChatMessage } from '../api'
 import { notifyDataChanged } from '../ui'
 
 export type ActionState = 'pending' | 'busy' | 'done' | 'declined' | 'error'
@@ -15,6 +15,8 @@ export interface ActionCard {
 export interface Bubble extends ChatMessage {
   error?: boolean
   actions?: ActionCard[]
+  /** Речі, про які відповідь, — показуємо міні-картками */
+  products?: AdminProductListItem[]
 }
 
 const STORAGE_KEY = 'mamyna-shafa:assistant'
@@ -111,7 +113,12 @@ export function useAssistantChat(context: string, onDataChanged?: () => void) {
         const reply = await adminApi.ask(history.filter((m) => !m.error).map(forModel), context, actionsOn)
         save([
           ...load(),
-          { role: 'assistant', text: reply.text, actions: reply.actions.map((action) => ({ action, state: 'pending' })) },
+          {
+            role: 'assistant',
+            text: reply.text,
+            actions: reply.actions.map((action) => ({ action, state: 'pending' })),
+            products: reply.products,
+          },
         ])
       } catch (err) {
         const text = err instanceof ApiError ? err.message : 'Не вдалося отримати відповідь. Спробуйте ще раз.'

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowRightIcon, CheckIcon, MicIcon } from '../../components/Icons'
-import type { AssistantActionKind } from '../api'
+import { Link } from 'react-router-dom'
+import { ArrowRightIcon, CameraIcon, CheckIcon, MicIcon } from '../../components/Icons'
+import { formatPrice } from '../../lib/format'
+import type { AdminProductListItem, AssistantActionKind } from '../api'
+import { ProductStatusDot } from '../ui'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { useActionMode, type ActionCard, type Bubble } from './useAssistantChat'
 import { useDictation } from './useDictation'
@@ -29,6 +32,30 @@ function ActionCardView({ card, onDecide }: { card: ActionCard; onDecide: (confi
   )
 }
 
+/** Речі прямо в чаті: фото, назва, розмір, ціна, статус — натиснула й потрапила в річ. */
+function ProductStrip({ products }: { products: AdminProductListItem[] }) {
+  return (
+    <div className="ai-products">
+      {products.map((p) => (
+        <Link key={p.id} to={`/admin/products/${p.id}`} className="ai-product">
+          <span className="ai-product__thumb">
+            {p.coverUrl ? <img src={p.coverUrl} alt="" loading="lazy" /> : <CameraIcon size={18} aria-label="Без фото" />}
+          </span>
+          <span className="ai-product__body">
+            <b>{p.name}</b>
+            <small>{p.sizeNote ?? `${p.sizeCm} см`} · {p.sku}{p.storageLocation && ` · ${p.storageLocation}`}</small>
+            <span className="ai-product__meta">
+              <b>{formatPrice(p.price)}</b>
+              {p.oldPrice && <s>{formatPrice(p.oldPrice)}</s>}
+              <ProductStatusDot status={p.status} />
+            </span>
+          </span>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
 interface AssistantLogProps {
   messages: Bubble[]
   busy: boolean
@@ -50,13 +77,14 @@ export function AssistantLog({ messages, busy, intro, onDecide }: AssistantLogPr
       {messages.map((m, i) => (
         <div key={i} className="ai-turn">
           <div className={`ai-bubble ai-bubble--${m.role}${m.error ? ' ai-bubble--error' : ''}`}>{m.text}</div>
+          {m.products && m.products.length > 0 && <ProductStrip products={m.products} />}
           {m.actions?.map((card, j) => (
             <ActionCardView key={j} card={card} onDecide={(confirm) => onDecide?.(i, j, confirm)} />
           ))}
         </div>
       ))}
       {busy && <div className="ai-bubble ai-bubble--assistant ai-bubble--typing">Думаю…</div>}
-      <div ref={end} />
+      <div ref={end} className="ai-log__end" />
     </div>
   )
 }
@@ -105,9 +133,11 @@ interface AssistantInputProps {
   before?: ReactNode
   placeholder?: string
   large?: boolean
+  /** Над підказками, у закріпленій нижній панелі — тут живе перемикач «Поради / Дії» */
+  toolbar?: ReactNode
 }
 
-export function AssistantInput({ hints, busy, onAsk, before, placeholder = 'Спитайте помічника…', large }: AssistantInputProps) {
+export function AssistantInput({ hints, busy, onAsk, before, placeholder = 'Спитайте помічника…', large, toolbar }: AssistantInputProps) {
   const [text, setText] = useState('')
   const dictation = useDictation(setText)
 
@@ -119,6 +149,7 @@ export function AssistantInput({ hints, busy, onAsk, before, placeholder = 'Сп
 
   return (
     <div className={`ai-input${large ? ' ai-input--large' : ''}`}>
+      {toolbar && <div className="ai-input__toolbar">{toolbar}</div>}
       {hints.length > 0 && (
         <div className="ai-input__hints" aria-label="Підказки">
           {hints.map((h) => (

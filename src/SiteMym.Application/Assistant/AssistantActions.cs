@@ -55,7 +55,8 @@ internal sealed partial class AssistantActionTools(IProductRepository products, 
     public static IReadOnlyList<ChatTool> Definitions { get; } =
     [
         new("update_product",
-            "Підготувати зміну речі: ціна, стара (закреслена) ціна, назва, опис, де лежить. Вкажи лише те, що треба змінити. old_price: 0 — прибрати закреслену ціну.",
+            "Підготувати зміну речі: ціна (будь-яка, вища чи нижча), назва, опис, де лежить. Вкажи лише те, що треба змінити. " +
+            "old_price — закреслена ціна, ЛИШЕ якщо прямо просять показати знижку; 0 — прибрати закреслену.",
             """{"type":"object","properties":{"sku":{"type":"string"},"price":{"type":"number"},"old_price":{"type":"number"},"name":{"type":"string"},"description":{"type":"string"},"storage_location":{"type":"string"}},"required":["sku"],"additionalProperties":false}"""),
 
         new("change_product_status",
@@ -108,21 +109,26 @@ internal sealed partial class AssistantActionTools(IProductRepository products, 
         var name = Text(args, "name") is { } nm && nm != product.Name ? nm : null;
         var description = Text(args, "description") is { } ds && ds != product.Description ? ds : null;
         var location = Text(args, "storage_location") is { } lc && lc != product.StorageLocation ? lc : null;
-        if (price is null && oldPrice is null && name is null && description is null && location is null)
-            return (null, "Нічого міняти: усе вже так, як просять");
         if (price is <= 0)
             return (null, "Помилка: ціна має бути більшою за нуль");
 
         var newPrice = price ?? product.Price;
-        var removeOld = oldPrice == 0;
+        // Ціну можна ставити будь-яку — і вищу, і нижчу. Закреслена ціна має сенс лише вища за нову:
+        // інакше її просто прибираємо, а не сваримось.
         if (oldPrice is > 0 && oldPrice <= newPrice)
-            return (null, "Помилка: закреслена ціна має бути більшою за нову");
+            oldPrice = null;
+        var removeOld = oldPrice == 0
+            || (price is not null && oldPrice is null && product.OldPrice is { } current && current <= newPrice);
+        if (removeOld && product.OldPrice is null)
+            removeOld = false;
+        if (price is null && oldPrice is null && !removeOld && name is null && description is null && location is null)
+            return (null, "Нічого міняти: усе вже так, як просять");
 
         var parts = new List<string>();
         if (price is not null)
             parts.Add($"ціна {Money(product.Price)} → {Money(newPrice)}");
         if (removeOld)
-            parts.Add("прибрати закреслену ціну");
+            parts.Add(oldPrice == 0 ? "прибрати закреслену ціну" : "закреслену ціну прибрати (вона менша за нову)");
         else if (oldPrice is not null)
             parts.Add($"закреслена ціна {Money(oldPrice.Value)}");
         if (name is not null)

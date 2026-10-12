@@ -269,7 +269,7 @@ export const adminApi = {
 
   assistantEnabled: () => request<{ enabled: boolean }>('/admin/assistant'),
   ask: (messages: ChatMessage[], context: string, allowActions: boolean) =>
-    request<{ text: string; actions: AssistantAction[] }>('/admin/assistant', {
+    request<{ text: string; actions: AssistantAction[]; products: AdminProductListItem[] }>('/admin/assistant', {
       method: 'POST',
       body: json({ messages, context, allowActions }),
     }),

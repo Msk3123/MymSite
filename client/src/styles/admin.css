@@ -2320,3 +2320,132 @@ small.a-muted {
   flex-direction: row;
   flex-grow: 0;
 }
+
+/* ---------- Речі в чаті помічника ---------- */
+
+.ai-products {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 4px;
+  max-width: 100%;
+}
+
+.ai-product {
+  flex: 0 0 236px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-decoration: none;
+  display: flex;
+  gap: 10px;
+}
+
+.ai-product:hover {
+  border-color: var(--stone);
+}
+
+.ai-product__thumb {
+  flex: 0 0 48px;
+  height: 60px;
+  border-radius: 10px;
+  background: var(--sand);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--stone);
+}
+
+.ai-product__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ai-product__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.ai-product__body > b {
+  font: 700 14px/18px var(--font-display);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-product__body small {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-product__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 12px;
+}
+
+.ai-product__meta > b {
+  font: 800 14px var(--font-display);
+}
+
+.ai-product__meta s {
+  color: var(--muted);
+}
+
+/* Перемикач «Поради / Дії» у закріпленій нижній панелі — видно завжди, навіть у довгій розмові. */
+.ai-input__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.ai-input__mode-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ai-input__mode-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ai-page .ai-input {
+  border-top: 1px solid var(--line);
+}
+
+/* Телефон: нижня панель помічника компактна — підказки одним рядком, без пояснення під перемикачем. */
+@media (max-width: 899px) {
+  .ai-input--large .ai-input__hints {
+    flex-wrap: nowrap;
+  }
+
+  .ai-input--large .ai-input__hints button {
+    height: 36px;
+    font-size: 13px;
+  }
+
+  .ai-input__mode-hint {
+    display: none;
+  }
+
+  .ai-page .ai-input {
+    gap: 6px;
+    padding: 8px 0;
+  }
+}
+
+/* Прокрутка до нової відповіді зупиняється над закріпленою нижньою панеллю, а не під нею. */
+.ai-page .ai-log__end {
+  scroll-margin-bottom: 220px;
+}

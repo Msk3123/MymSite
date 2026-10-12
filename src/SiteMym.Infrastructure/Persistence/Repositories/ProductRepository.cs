@@ -116,7 +116,11 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
             query = query.Where(p => p.Price <= max);
 
         // «куртка reserved» — кожне слово має знайтися в назві, бренді або артикулі.
-        var words = (filter.Search ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // Українські слова шукаємо за основою: «штанів», «куртку», «шапки» знайдуть «Штани», «Куртка», «Шапка».
+        var words = (filter.Search ?? string.Empty)
+            .Split([' ', ',', '.', '!', '?', '«', '»', '"'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(Stem)
+            .Where(w => w.Length > 0);
         foreach (var word in words)
         {
             var pattern = $"%{EscapeLike(word)}%";
@@ -124,6 +128,25 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
         }
 
         return query;
+    }
+
+    /// <summary>
+    /// Найпростіше «відсікання закінчення»: для кириличного слова з 5+ літер — мінус 2 літери, з 4 — мінус 1.
+    /// Короткі службові слова («з», «на», «до») не шукаємо зовсім. Латиницю й цифри (бренди, артикули) не чіпаємо.
+    /// </summary>
+    private static string Stem(string word)
+    {
+        var w = word.Trim();
+        var cyrillic = w.All(c => c is >= 'А' and <= 'я' or 'і' or 'ї' or 'є' or 'ґ' or 'І' or 'Ї' or 'Є' or 'Ґ' or '’' or '\'');
+        if (!cyrillic)
+            return w;
+        return w.Length switch
+        {
+            <= 2 => string.Empty,
+            4 => w[..3],
+            >= 5 => w[..^2],
+            _ => w
+        };
     }
 
     private static string EscapeLike(string value) =>

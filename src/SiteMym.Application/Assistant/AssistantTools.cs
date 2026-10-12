@@ -27,6 +27,9 @@ internal sealed class AssistantTools(
 {
     private const int MaxLimit = 20;
 
+    /// <summary>Речі, які модель знайшла за цю відповідь, — щоб показати їх у чаті картками.</summary>
+    public List<AdminProductListItem> Found { get; } = [];
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         // Кирилиця як є, а не Р… — менше токенів і модель краще читає.
@@ -169,6 +172,7 @@ internal sealed class AssistantTools(
         var result = await findProducts.Handle(new GetAdminProductsQuery(filter), ct);
         if (result.IsFailure)
             return Error(result.Error.Message);
+        Found.AddRange(result.Value.Items);
 
         return Serialize(new
         {
