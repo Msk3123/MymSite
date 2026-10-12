@@ -7,12 +7,12 @@ export type AdminProductStatus = ProductStatus | 'draft'
 export type OrderStatus = 'new' | 'confirmed' | 'shipped' | 'completed' | 'cancelled'
 export type ProductAction = 'publish' | 'unpublish' | 'mark-sold'
 export type OrderAction = 'confirm' | 'ship' | 'complete' | 'cancel'
-export type BulkAction = 'hide' | 'discount10'
+export type BulkAction = 'hide' | 'discount10' | 'delete'
 
 export interface Me {
   login: string
   ownerName: string
-  /** Кличний відмінок: «Ларісо» */
+  /** Кличний відмінок: «Ларисо» */
   greetingName: string
 }
 
@@ -163,6 +163,25 @@ export interface ProductSuggestion {
   uncertain: string[]
 }
 
+export type AssistantActionKind =
+  | 'update-product' | 'publish-product' | 'hide-product' | 'mark-product-sold' | 'delete-product'
+  | 'confirm-order' | 'ship-order' | 'complete-order' | 'cancel-order'
+
+/** Дія, яку помічник підготував у «Режимі дій». Виконується лише після «Так» (adminApi.executeAction). */
+export interface AssistantAction {
+  kind: AssistantActionKind
+  summary: string
+  sku?: string | null
+  orderNumber?: number | null
+  price?: number | null
+  oldPrice?: number | null
+  removeOldPrice?: boolean
+  name?: string | null
+  description?: string | null
+  storageLocation?: string | null
+  trackingNumber?: string | null
+}
+
 export interface PriceHint {
   min: number
   max: number
@@ -249,8 +268,13 @@ export const adminApi = {
     request<Order>(`/admin/orders/${number}/note`, { method: 'PUT', body: json({ note }) }),
 
   assistantEnabled: () => request<{ enabled: boolean }>('/admin/assistant'),
-  ask: (messages: ChatMessage[], context?: string) =>
-    request<{ text: string }>('/admin/assistant', { method: 'POST', body: json({ messages, context }) }),
+  ask: (messages: ChatMessage[], context: string, allowActions: boolean) =>
+    request<{ text: string; actions: AssistantAction[] }>('/admin/assistant', {
+      method: 'POST',
+      body: json({ messages, context, allowActions }),
+    }),
+  executeAction: (action: AssistantAction) =>
+    mutate<{ message: string }>('/admin/assistant/actions', { method: 'POST', body: json(action) }),
   describe: (photos: Blob[], tagIndex: number | null) => {
     const form = new FormData()
     photos.forEach((p, i) => form.append('files', p, `photo-${i}.jpg`))

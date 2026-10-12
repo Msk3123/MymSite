@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeftIcon, CameraIcon, PhoneIcon, SearchIcon } from '../../components/Icons'
 import { CONDITIONS } from '../../data/catalog'
 import { formatPrice, itemsCount, plural } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
 import { adminApi, ORDER_STATUS, type Order, type OrderAction, type OrderStatus } from '../api'
-import { Empty, ErrorNote, longWhen, OrderStatusBadge, shortWhen, useAdmin, useAssistantContext } from '../ui'
+import { ConfirmDialog } from '../ConfirmDialog'
+import { Empty, ErrorNote, longWhen, OrderStatusBadge, shortWhen, useAdmin, useAssistantContext, useDataChanged } from '../ui'
 
 const TABS: OrderStatus[] = ['new', 'confirmed', 'shipped', 'completed', 'cancelled']
 const STEPS: { status: OrderStatus; label: string }[] = [
@@ -66,11 +67,14 @@ function NoteField({ order, onSaved }: { order: Order; onSaved: (o: Order) => vo
 function OrderDetails({ number, onChanged }: { number: number; onChanged: () => void }) {
   const { refreshSummary } = useAdmin()
   const [version, setVersion] = useState(0)
+  // Помічник змінив дані (режим дій) — перечитуємо.
+  useDataChanged(useCallback(() => setVersion((v) => v + 1), []))
   const { data: loaded, error: loadError } = useAsync(`order:${number}:${version}`, () => adminApi.order(number))
   const [order, setOrder] = useState<Order | null>(null)
   const [ttn, setTtn] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const [askCancel, setAskCancel] = useState(false)
 
   useEffect(() => {
     if (loaded) setOrder(loaded)
@@ -86,8 +90,7 @@ function OrderDetails({ number, onChanged }: { number: number; onChanged: () => 
   if (loadError) return <ErrorNote error={loadError} />
   if (!order) return <div className="a-detail" aria-busy="true" />
 
-  const run = async (action: OrderAction, question?: string) => {
-    if (question && !window.confirm(question)) return
+  const run = async (action: OrderAction) => {
     setBusy(true)
     setError(null)
     try {
@@ -101,7 +104,7 @@ function OrderDetails({ number, onChanged }: { number: number; onChanged: () => 
       setBusy(false)
     }
   }
-  const cancel = () => run('cancel', `Скасувати замовлення №${order.number}? Речі знову з’являться на сайті.`)
+  const cancel = () => setAskCancel(true)
   const history = order.customerHistory
 
   return (
@@ -181,6 +184,14 @@ function OrderDetails({ number, onChanged }: { number: number; onChanged: () => 
       )}
 
       <NoteField order={order} onSaved={setOrder} />
+
+      {askCancel && (
+        <ConfirmDialog title={`Скасувати замовлення №${order.number}?`} confirmLabel="Так, скасувати" cancelLabel="Ні" danger busy={busy}
+          onConfirm={async () => { await run('cancel'); setAskCancel(false) }} onCancel={() => setAskCancel(false)}>
+          <p>{order.customerName}, {formatPrice(order.total)}.</p>
+          <p>Речі з замовлення знову з’являться на сайті, і їх зможуть замовити інші.</p>
+        </ConfirmDialog>
+      )}
     </article>
   )
 }
@@ -196,6 +207,8 @@ export function OrdersPage() {
   const search = params.get('q') ?? ''
   const [pages, setPages] = useState(1)
   const [version, setVersion] = useState(0)
+  // Помічник змінив дані (режим дій) — перечитуємо.
+  useDataChanged(useCallback(() => setVersion((v) => v + 1), []))
   const timer = useRef<number | undefined>(undefined)
 
   useAssistantContext(`список замовлень · ${ORDER_STATUS[tab].tab.toLowerCase()}`)

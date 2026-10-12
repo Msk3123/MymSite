@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using SiteMym.Application.Abstractions.Messaging;
 using SiteMym.Application.Assistant;
 using SiteMym.Application.Common;
+using SiteMym.Application.Products.Manage;
 
 namespace SiteMym.Application;
 
@@ -26,6 +27,8 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<ShopClock>();
         services.AddScoped<AssistantTools>();
+        services.AddScoped<AssistantActionTools>();
+        services.AddScoped<ProductRemover>();
 
         return services;
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/http'
 import { ArrowLeftIcon, SparkleIcon } from '../../components/Icons'
@@ -6,7 +6,8 @@ import { CATEGORIES, GENDERS, SEASONS, SIZES, sizeInfo, type Category, type Cond
 import { formatPrice } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
 import { adminApi, type AdminProduct, type ProductAction, type ProductInput, type ProductSuggestion } from '../api'
-import { ErrorNote, ProductStatusBadge, useAdmin, useAssistantContext } from '../ui'
+import { ConfirmDialog } from '../ConfirmDialog'
+import { ErrorNote, ProductStatusBadge, useAdmin, useAssistantContext, useDataChanged } from '../ui'
 import { shrinkForAi } from '../resizeImage'
 import { PhotoSlots, slotPhoto, SLOTS, type Pending } from './PhotoSlots'
 
@@ -113,6 +114,11 @@ function validate(f: Form): Errors {
   return e
 }
 
+/** Поле, яке помічник не зміг визначити з фото, — кажемо людською мовою, що робити. */
+function Unknown({ show }: { show: boolean }) {
+  return show ? <span className="a-field__unknown">Помічник не зміг визначити з фото — впишіть самі</span> : null
+}
+
 /** Позначка біля поля: звідки взялося значення після «Заповнити з фото». */
 type Source = 'photo' | 'check'
 
@@ -143,6 +149,7 @@ export function ProductEditPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [sources, setSources] = useState<Partial<Record<string, Source>>>({})
   const [conditionNote, setConditionNote] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const { data: assistant } = useAsync('assistant-status', adminApi.assistantEnabled)
   const { data: hint } = useAsync(`hint:${form.category}`, () => adminApi.priceHint(form.category))
@@ -179,6 +186,22 @@ export function ProductEditPage() {
   }, [id, isNew])
 
   const dirty = isNew || JSON.stringify(form) !== JSON.stringify(saved)
+
+  // Помічник у режимі дій змінив цю річ (ціну, опис…) — підтягуємо, якщо мама нічого не редагує.
+  useDataChanged(
+    useCallback(() => {
+      if (isNew || dirty) return
+      adminApi.product(id).then(
+        (p) => {
+          setProduct(p)
+          setForm(fromProduct(p))
+          setSaved(fromProduct(p))
+        },
+        // Річ видалили — повертаємось до списку.
+        () => navigate('/admin/products', { replace: true }),
+      )
+    }, [id, isNew, dirty, navigate]),
+  )
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => {
     setForm((f) => ({ ...f, [key]: value }))
@@ -242,7 +265,8 @@ export function ProductEditPage() {
       uncertain.has(field) ? 'check' : present ? 'photo' : undefined
     setForm((f) => ({
       ...f,
-      name: s.name,
+      // Чого помічник не визначив — лишаємо як було, а не порожнім чи «null».
+      name: s.name || f.name,
       brand: s.brand ?? f.brand,
       gender: s.gender,
       category: s.category,
@@ -252,7 +276,7 @@ export function ProductEditPage() {
       sizeNote: s.sizeNote ?? f.sizeNote,
       composition: s.composition ?? f.composition,
       insulation: s.insulation ?? f.insulation,
-      description: s.description,
+      description: s.description || f.description,
       defectNote: s.defectNote ?? f.defectNote,
       measurements: f.measurements.every((m) => !m.value.trim()) ? presetFor(s.category) : f.measurements,
     }))
@@ -334,15 +358,16 @@ export function ProductEditPage() {
   }
 
   const remove = async () => {
-    if (!product || !window.confirm(`Видалити «${product.name}» назавжди разом з фото?`)) return
+    if (!product) return
     setBusy('delete')
     try {
       await adminApi.deleteProduct(product.id)
       refreshSummary()
-      navigate('/admin/products', { replace: true })
+      navigate('/admin/products', { replace: true, state: { notice: `«${product.name}» видалено.` } })
     } catch (err) {
       setError(err)
       setBusy(null)
+      setConfirmDelete(false)
     }
   }
 
@@ -394,7 +419,7 @@ export function ProductEditPage() {
         <label className={`a-field${errors.name ? ' a-field--error' : ''}${sources.name === 'check' ? ' a-field--check' : ''}`}>
           <Label text="Назва" source={sources.name} />
           <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Шапка в’язана з помпоном" />
-          {errors.name && <span className="a-field__error">{errors.name}</span>}
+          {errors.name ? <span className="a-field__error">{errors.name}</span> : <Unknown show={sources.name === 'check' && !form.name.trim()} />}
         </label>
 
         <fieldset className={`a-field${sources.gender === 'check' ? ' a-field--check' : ''}`}>
@@ -443,6 +468,7 @@ export function ProductEditPage() {
               onChange={(e) => set('sizeCm', e.target.value.replace(/\D/g, ''))} />
           </div>
           {errors.sizeCm ? <span className="a-field__error">{errors.sizeCm}</span>
+            : sources.sizeCm === 'check' && !form.sizeCm ? <Unknown show />
             : <span className="a-muted">{age ? `Вік підставиться автоматично: ${age}` : 'Вік підставиться автоматично'}{form.sizeNote && ` · на бірці: ${form.sizeNote}`}</span>}
         </fieldset>
 
@@ -482,6 +508,7 @@ export function ProductEditPage() {
           <label className={`a-field${sources.brand === 'check' ? ' a-field--check' : ''}`}>
             <Label text="Бренд" source={sources.brand} />
             <input value={form.brand} onChange={(e) => set('brand', e.target.value)} placeholder="H&M" />
+            <Unknown show={sources.brand === 'check' && !form.brand.trim()} />
           </label>
           <label className={`a-field${sources.season === 'check' ? ' a-field--check' : ''}`}>
             <Label text="Сезон" source={sources.season} />
@@ -494,6 +521,7 @@ export function ProductEditPage() {
         <label className={`a-field${sources.composition === 'check' ? ' a-field--check' : ''}`}>
           <Label text="Склад" source={sources.composition} optional={!sources.composition} />
           <input value={form.composition} onChange={(e) => set('composition', e.target.value)} placeholder="Верх 100% акрил, підкладка — фліс" />
+          <Unknown show={sources.composition === 'check' && !form.composition.trim()} />
         </label>
 
         <fieldset className="a-field">
@@ -594,8 +622,29 @@ export function ProductEditPage() {
             {dirty && product.status === 'available' && <p className="a-warn">Спершу збережіть зміни.</p>}
           </section>
         )}
-        {product && (product.status === 'draft' || product.status === 'available') && (
-          <button type="button" className="a-link-btn a-danger" disabled={!!busy} onClick={remove}>Видалити річ</button>
+        {product && (
+          <section className="a-danger-zone" aria-label="Видалення">
+            {product.status === 'reserved' ? (
+              <p className="a-muted">Річ зараз у замовленні — її можна буде видалити, коли замовлення завершиться або ви його скасуєте.</p>
+            ) : (
+              <button type="button" className="a-btn a-btn--outline a-btn--delete" disabled={!!busy} onClick={() => setConfirmDelete(true)}>
+                Видалити річ
+              </button>
+            )}
+          </section>
+        )}
+        {product && confirmDelete && (
+          <ConfirmDialog
+            title="Видалити річ?"
+            confirmLabel="Так, видалити"
+            danger
+            busy={busy === 'delete'}
+            onConfirm={remove}
+            onCancel={() => setConfirmDelete(false)}
+          >
+            <p>«<b>{product.name}</b>» ({product.sku}) зникне з сайту й з «Моїх речей», фото буде стерто.</p>
+            <p>Повернути її не вийде. Якщо річ треба лише прибрати на час — краще «Сховати з сайту».</p>
+          </ConfirmDialog>
         )}
 
         <div className="a-savebar">

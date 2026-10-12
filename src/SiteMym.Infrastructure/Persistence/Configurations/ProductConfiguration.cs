@@ -45,6 +45,10 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.Ignore(p => p.IsAvailable);
 
+        // Видалені речі (див. Product.Delete) ніде не показуємо. Де вони таки потрібні (історія замовлень,
+        // наступний артикул), репозиторій явно викликає IgnoreQueryFilters.
+        builder.HasQueryFilter(p => p.DeletedAtUtc == null);
+
         // Кожна річ одна: якщо дві людини одночасно замовлять ту саму куртку,
         // друге збереження впаде з DbUpdateConcurrencyException (Postgres xmin).
         builder.Property<uint>("Version").IsRowVersion();

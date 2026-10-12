@@ -11,7 +11,10 @@ public enum BulkProductAction
     Hide,
 
     /// <summary>Знижка 10%: стара ціна закреслюється, нова — на 10% менша (до гривні).</summary>
-    Discount10
+    Discount10,
+
+    /// <summary>Видалити назавжди (заброньовані пропускаємо).</summary>
+    Delete
 }
 
 public sealed record BulkProductsCommand(IReadOnlyCollection<Guid> Ids, BulkProductAction Action) : ICommand<BulkResult>;
@@ -20,7 +23,7 @@ public sealed record BulkProductsCommand(IReadOnlyCollection<Guid> Ids, BulkProd
 /// <param name="Skipped">Скільки пропущено (наприклад, заброньовані не ховаємо).</param>
 public sealed record BulkResult(int Changed, int Skipped);
 
-internal sealed class BulkProductsCommandHandler(IProductRepository products, IUnitOfWork unitOfWork)
+internal sealed class BulkProductsCommandHandler(IProductRepository products, ProductRemover remover, IUnitOfWork unitOfWork)
     : ICommandHandler<BulkProductsCommand, BulkResult>
 {
     private const int MaxItems = 100;
@@ -36,14 +39,26 @@ internal sealed class BulkProductsCommandHandler(IProductRepository products, IU
 
         var items = await products.GetByIdsAsync(ids, ct);
         var changed = 0;
+        var filesToDelete = new List<string>();
         foreach (var product in items)
         {
-            var result = command.Action switch
+            Result result;
+            if (command.Action == BulkProductAction.Delete)
             {
-                BulkProductAction.Hide => product.Unpublish(),
-                BulkProductAction.Discount10 => Discount(product),
-                _ => throw new ArgumentOutOfRangeException(nameof(command), command.Action, null)
-            };
+                var removed = await remover.RemoveAsync(product, ct);
+                if (removed.IsSuccess)
+                    filesToDelete.AddRange(removed.Value);
+                result = removed;
+            }
+            else
+            {
+                result = command.Action switch
+                {
+                    BulkProductAction.Hide => product.Unpublish(),
+                    BulkProductAction.Discount10 => Discount(product),
+                    _ => throw new ArgumentOutOfRangeException(nameof(command), command.Action, null)
+                };
+            }
             if (result.IsSuccess)
                 changed++;
         }
@@ -56,6 +71,8 @@ internal sealed class BulkProductsCommandHandler(IProductRepository products, IU
         {
             return Result.Failure<BulkResult>(ProductSaving.Conflict);
         }
+
+        await remover.DeleteFilesAsync(filesToDelete, ct);
 
         return new BulkResult(changed, ids.Count - changed);
     }

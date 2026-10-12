@@ -15,7 +15,9 @@ public static class ProductErrors
     public static readonly Error PhotoNotFound = new("Product.PhotoNotFound", "Фото не знайдено");
     public static readonly Error TooManyPhotos = new("Product.TooManyPhotos", $"Не більше {Product.MaxPhotos} фото на одну річ");
     public static readonly Error PhotoInvalid = new("Product.PhotoInvalid", "Це не схоже на фото. Підходять JPG, PNG або WebP до 10 МБ");
-    public static readonly Error UsedInOrders = new("Product.UsedInOrders", "Ця річ є в замовленні — її не можна видалити, лише сховати з сайту");
+    public static readonly Error ReservedCannotDelete = new(
+        "Product.ReservedCannotDelete",
+        "Ця річ зараз у замовленні. Спершу завершіть або скасуйте замовлення — тоді її можна буде видалити");
 
     public static Error NotAvailable(string sku) =>
         new("Product.NotAvailable", $"Річ {sku} вже зарезервована або продана");

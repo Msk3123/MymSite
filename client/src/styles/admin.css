@@ -2116,3 +2116,207 @@ small.a-muted {
   flex-direction: column;
   gap: 16px;
 }
+
+.a-field__unknown {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ochre-ink);
+}
+
+/* ---------- Підтвердження ---------- */
+
+.a-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  padding: var(--gutter);
+  background: rgba(46, 38, 32, 0.45);
+  display: grid;
+  place-items: center;
+}
+
+.a-dialog {
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 16px 48px rgba(46, 38, 32, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.a-dialog h2 {
+  font: 800 22px/28px var(--font-display);
+}
+
+.a-dialog__text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--muted);
+}
+
+.a-dialog__text b {
+  color: var(--ink);
+}
+
+.a-dialog__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.a-btn--danger {
+  background: #b3261e;
+  color: #fff !important;
+}
+
+.a-btn--danger:hover:not(:disabled) {
+  background: #8c1d18;
+}
+
+.a-danger-zone {
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.a-btn--delete {
+  border-color: #d9a29e;
+  color: #b3261e;
+}
+
+.a-btn--on-dark-danger {
+  border-color: #f0a19b;
+  color: #ffd2ce;
+}
+
+/* ---------- Режим дій помічника ---------- */
+
+.ai-mode {
+  flex: 0 0 auto;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--sand);
+  display: inline-flex;
+  gap: 2px;
+}
+
+.ai-mode button {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: 700 14px/1 var(--font-display);
+  cursor: pointer;
+}
+
+.ai-mode button[aria-pressed='true'] {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(46, 38, 32, 0.12);
+}
+
+.ai-mode button:last-child[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ai-mode--compact {
+  margin-left: auto;
+}
+
+.ai-mode--compact button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.ai-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-turn > .ai-bubble--user {
+  align-self: flex-end;
+}
+
+.ai-turn > .ai-bubble--assistant {
+  align-self: flex-start;
+}
+
+.ai-action {
+  align-self: flex-start;
+  width: min(100%, 420px);
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--sage-fill);
+  background: var(--sage);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-action--danger {
+  border-color: #e3a6a1;
+  background: #fbeceb;
+}
+
+.ai-action--done {
+  border-style: solid;
+}
+
+.ai-action--declined {
+  opacity: 0.6;
+}
+
+.ai-action__text {
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 600;
+}
+
+.ai-action__buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-action__buttons .a-btn {
+  min-height: 40px;
+  font-size: 14px;
+}
+
+.ai-action__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.ai-action__note--ok {
+  color: var(--sage-ink);
+}
+
+.ai-action__note--error {
+  color: #b3261e;
+}
+
+.a-panel--warn {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+/* У шапці сторінки помічника загальне правило для div робить колонку — перемикач лишаємо рядком. */
+.ai-page__head > .ai-mode {
+  flex-direction: row;
+  flex-grow: 0;
+}

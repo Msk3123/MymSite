@@ -44,6 +44,12 @@ public sealed class Product : Entity
     public ProductStatus Status { get; private set; }
     public DateTime? SoldAtUtc { get; private set; }
 
+    /// <summary>
+    /// Видалена річ, яку колись замовляли: з сайту й кабінету її не видно, фото стерті,
+    /// але запис лишається — щоб у старих замовленнях було видно, що саме купили.
+    /// </summary>
+    public DateTime? DeletedAtUtc { get; private set; }
+
     public IReadOnlyList<Measurement> Measurements => _measurements;
     public IReadOnlyList<ProductPhoto> Photos => _photos;
 
@@ -192,6 +198,22 @@ public sealed class Product : Entity
 
     /// <summary>Чернетка → у продажу. Поки річ у чернетці, на сайті її не видно.</summary>
     public Result Publish() => MoveTo(ProductStatus.Available, ProductStatus.Draft);
+
+    /// <summary>
+    /// Прибрати річ назавжди. Не можна, поки вона в незакритому замовленні:
+    /// спершу замовлення треба завершити або скасувати.
+    /// </summary>
+    /// <returns>Фото, які треба стерти з диска.</returns>
+    public Result<IReadOnlyList<ProductPhoto>> Delete()
+    {
+        if (Status == ProductStatus.Reserved)
+            return Result.Failure<IReadOnlyList<ProductPhoto>>(ProductErrors.ReservedCannotDelete);
+
+        IReadOnlyList<ProductPhoto> photos = _photos.ToList();
+        _photos.Clear();
+        DeletedAtUtc = DateTime.UtcNow;
+        return Result.Success(photos);
+    }
 
     /// <summary>Сховати з сайту (наприклад, віддала знайомим або треба перефотографувати).</summary>
     public Result Unpublish() => MoveTo(ProductStatus.Draft, ProductStatus.Available);

@@ -55,7 +55,8 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
         На фото: загальний вигляд речі, бірка з розміром і складом, деталі, можливо дефект.
 
         Правила:
-        - Бренд, розмір і склад бери ТІЛЬКИ з бірки. Не видно — null і додай поле в uncertain.
+        - Бренд, розмір і склад бери ТІЛЬКИ з бірки. Не видно — JSON null (не рядок "null"!) і додай поле в uncertain.
+        - name завжди заповнюй: навіть без бірки видно, що це за річ («Светр», «Куртка зимова»).
         - Розмір на дитячих бірках — зріст у см («98», «98/104», «2-3Y»). sizeCm — перше число зросту
           (98/104 → 98; 2-3Y → 98). sizeNote — як написано на бірці, якщо це не просто одне число.
           Для взуття sizeNote «р. 26», для шапок — обхват голови «48–50 см», а sizeCm — приблизний зріст дитини.
@@ -148,12 +149,55 @@ internal sealed class DescribeProductCommandHandler(IChatModel model, ILogger<De
             return Result.Failure<ProductSuggestion>(CannotRead);
         }
 
-        if (suggestion is null || string.IsNullOrWhiteSpace(suggestion.Name))
+        if (suggestion is null)
             return Result.Failure<ProductSuggestion>(CannotRead);
 
-        // Зріст поза межами магазину — краще порожньо, ніж неправда.
-        return suggestion.SizeCm is < Product.MinSizeCm or > Product.MaxSizeCm
-            ? suggestion with { SizeCm = null, Uncertain = [.. suggestion.Uncertain, "sizeCm"] }
-            : suggestion;
+        return Clean(suggestion);
     }
+
+    /// <summary>
+    /// Модель інколи пише рядок «null» / «невідомо» замість справжнього null — мама побачила б це як текст у полі.
+    /// Такі значення прибираємо, а поле позначаємо «перевірте».
+    /// </summary>
+    private static ProductSuggestion Clean(ProductSuggestion s)
+    {
+        var uncertain = new HashSet<string>(s.Uncertain);
+        string? Text(string? value, string field)
+        {
+            if (IsBlank(value))
+            {
+                uncertain.Add(field);
+                return null;
+            }
+            return value!.Trim();
+        }
+
+        var name = Text(s.Name, "name");
+        var cleaned = s with
+        {
+            Name = name ?? string.Empty,
+            Brand = Text(s.Brand, "brand"),
+            SizeNote = IsBlank(s.SizeNote) ? null : s.SizeNote!.Trim(),
+            Composition = Text(s.Composition, "composition"),
+            Insulation = IsBlank(s.Insulation) ? null : s.Insulation!.Trim(),
+            Description = IsBlank(s.Description) ? string.Empty : s.Description.Trim(),
+            DefectNote = IsBlank(s.DefectNote) ? null : s.DefectNote!.Trim(),
+            ConditionNote = IsBlank(s.ConditionNote) ? null : s.ConditionNote!.Trim(),
+            // Зріст поза межами магазину — краще порожньо, ніж неправда.
+            SizeCm = s.SizeCm is >= Product.MinSizeCm and <= Product.MaxSizeCm ? s.SizeCm : null
+        };
+        if (cleaned.SizeCm is null)
+            uncertain.Add("sizeCm");
+
+        return cleaned with { Uncertain = uncertain.ToList() };
+    }
+
+    private static readonly HashSet<string> Placeholders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "null", "none", "nil", "n/a", "na", "unknown", "-", "—", "–", "?", "невідомо", "немає", "не вказано",
+        "не видно", "нема", "відсутній", "відсутня"
+    };
+
+    private static bool IsBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) || Placeholders.Contains(value.Trim().Trim('.', '"', '«', '»'));
 }

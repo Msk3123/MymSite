@@ -12,9 +12,12 @@ namespace SiteMym.Application.Assistant;
 public sealed record AssistantMessage(string Role, string Text);
 
 /// <param name="Context">Що мама зараз відкрила: «замовлення №1047», «річ МШ-0412 Куртка демісезонна». Короткий текст від фронта.</param>
-public sealed record AskAssistantCommand(IReadOnlyList<AssistantMessage> Messages, string? Context = null) : ICommand<AssistantReply>;
+/// <param name="AllowActions">«Режим дій»: помічник може готувати зміни (виконуються лише після «Так» мами).</param>
+public sealed record AskAssistantCommand(IReadOnlyList<AssistantMessage> Messages, string? Context = null, bool AllowActions = false)
+    : ICommand<AssistantReply>;
 
-public sealed record AssistantReply(string Text);
+/// <param name="Actions">Підготовлені дії — фронт показує їх картками з кнопкою «Так».</param>
+public sealed record AssistantReply(string Text, IReadOnlyList<AssistantAction> Actions);
 
 public static class AssistantErrors
 {
@@ -34,6 +37,7 @@ public static class AssistantErrors
 internal sealed class AskAssistantCommandHandler(
     IChatModel model,
     AssistantTools tools,
+    AssistantActionTools actionTools,
     ShopClock clock,
     IOptions<ShopSettings> shop,
     ILogger<AskAssistantCommandHandler> logger) : ICommandHandler<AskAssistantCommand, AssistantReply>
@@ -45,6 +49,7 @@ internal sealed class AskAssistantCommandHandler(
     private const int MaxHistoryMessageLength = 2000;
     private const int MaxToolRounds = 4;
     private const int MaxContextLength = 200;
+    private const int MaxActions = 10;
 
     public async Task<Result<AssistantReply>> Handle(AskAssistantCommand command, CancellationToken ct)
     {
@@ -59,31 +64,79 @@ internal sealed class AskAssistantCommandHandler(
 
         var settings = shop.Value;
         // Незмінна частина — першою (OpenAI кешує однаковий початок), час і «що на екрані» — в кінці.
-        var messages = new List<ChatMessage> { ChatMessage.System(AssistantPrompt.Static(settings.Name, settings.OwnerName)) };
+        var messages = new List<ChatMessage>
+        {
+            ChatMessage.System(AssistantPrompt.Static(settings.Name, settings.OwnerName, command.AllowActions))
+        };
         messages.AddRange(command.Messages
             .TakeLast(MaxHistory)
             .Where(m => !string.IsNullOrWhiteSpace(m.Text))
             .Select(m => m.Role == "assistant" ? ChatMessage.Assistant(Truncate(m.Text, MaxHistoryMessageLength)) : ChatMessage.User(Truncate(m.Text, MaxHistoryMessageLength))));
         messages.Add(ChatMessage.System(AssistantPrompt.Now(clock.LocalNow, Truncate(command.Context, MaxContextLength))));
 
+        // Інструменти змін моделі навіть не показуємо, поки «Режим дій» вимкнений.
+        IReadOnlyList<ChatTool> toolset = command.AllowActions
+            ? [.. AssistantTools.Definitions, .. AssistantActionTools.Definitions]
+            : AssistantTools.Definitions;
+        var prepared = new List<AssistantAction>();
+        var nudged = false;
+        var toolCalls = 0;
+
         try
         {
             for (var round = 0; round < MaxToolRounds; round++)
             {
                 // Останній круг — без інструментів, щоб модель точно відповіла текстом.
-                var available = round < MaxToolRounds - 1 ? AssistantTools.Definitions : [];
+                var available = round < MaxToolRounds - 1 ? toolset : [];
                 var completion = await model.CompleteAsync(messages, available, ct);
 
                 if (completion.ToolCalls.Count == 0)
-                    return new AssistantReply(completion.Content?.Trim() is { Length: > 0 } text
+                {
+                    var text = completion.Content?.Trim() ?? string.Empty;
+
+                    // Модель пише «підготувала, натисніть «Так»», а інструмент дії не викликала —
+                    // мама натисла б «Так» у нікуди. Один раз змушуємо її таки підготувати дію.
+                    // Те саме з уточненнями «який саме?» без жодного пошуку — мамі зручніше обрати зі списку.
+                    var nudge = !command.AllowActions || prepared.Count > 0 || nudged ? null
+                        : ClaimsPrepared(text)
+                            ? "Ти написала, що підготувала дію, але не викликала жодного інструмента дій. Виклич їх зараз " +
+                              "(update_product, change_product_status, delete_product, order_action) для кожної речі чи замовлення, " +
+                              "або чесно скажи, що не вийшло."
+                        : toolCalls == 0 && text.Contains('?')
+                            ? "Не перепитуй навмання: спершу виклич find_products за словами з її прохання. Знайшлась одна річ — " +
+                              "готуй дію; кілька — покажи їх списком (назва, розмір, ціна, артикул) і спитай, яку саме."
+                            : null;
+                    if (nudge is not null)
+                    {
+                        nudged = true;
+                        round--;
+                        messages.Add(ChatMessage.Assistant(text));
+                        messages.Add(ChatMessage.System(nudge));
+                        continue;
+                    }
+
+                    return new AssistantReply(text.Length > 0
                         ? text
-                        : "Вибачте, не зрозумів питання. Спробуйте сказати інакше.");
+                        : prepared.Count > 0 ? "Підготувала — перевірте й натисніть «Так»." : "Вибачте, не зрозумів питання. Спробуйте сказати інакше.",
+                        prepared);
+                }
 
                 messages.Add(ChatMessage.Assistant(completion.Content, completion.ToolCalls));
+                toolCalls += completion.ToolCalls.Count;
                 foreach (var call in completion.ToolCalls)
                 {
                     logger.LogInformation("Assistant tool {Tool}({Args})", call.Name, call.ArgumentsJson);
-                    messages.Add(ChatMessage.ToolResult(call.Id, await tools.ExecuteAsync(call, ct)));
+                    if (command.AllowActions && AssistantActionTools.Handles(call.Name))
+                    {
+                        var (action, forModel) = await actionTools.PrepareAsync(call, ct);
+                        if (action is not null && prepared.Count < MaxActions)
+                            prepared.Add(action);
+                        messages.Add(ChatMessage.ToolResult(call.Id, forModel));
+                    }
+                    else
+                    {
+                        messages.Add(ChatMessage.ToolResult(call.Id, await tools.ExecuteAsync(call, ct)));
+                    }
                 }
             }
         }
@@ -100,6 +153,11 @@ internal sealed class AskAssistantCommandHandler(
 
         return Result.Failure<AssistantReply>(AssistantErrors.Unavailable);
     }
+
+    private static bool ClaimsPrepared(string text) =>
+        text.Contains("підготувал", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("натисніть «Так»", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("натисніть \"Так\"", StringComparison.OrdinalIgnoreCase);
 
     [return: NotNullIfNotNull(nameof(text))]
     private static string? Truncate(string? text, int max) =>

@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CameraIcon } from '../../components/Icons'
 import { formatNumber, formatPrice, itemsCount, plural } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
 import { adminApi, type Order, type Summary } from '../api'
-import { ErrorNote, greeting, todayLabel, useAdmin, useAssistantContext } from '../ui'
+import { ErrorNote, greeting, todayLabel, useAdmin, useAssistantContext, useDataChanged } from '../ui'
 
 const TAGS = {
   order: { bg: '#f6e1d6', fg: '#9a4122' },
@@ -84,7 +84,10 @@ export function TodayPage() {
   const { me, summary: s, refreshSummary, logout } = useAdmin()
   useAssistantContext('головна, план на сьогодні')
 
-  const { data: lists, error } = useAsync('today-orders', async () => {
+  const [version, setVersion] = useState(0)
+  // Помічник змінив дані (режим дій) — перечитуємо.
+  useDataChanged(useCallback(() => setVersion((v) => v + 1), []))
+  const { data: lists, error } = useAsync(`today-orders:${version}`, async () => {
     const [fresh, toShip] = await Promise.all([adminApi.orders('new', '', 1), adminApi.orders('confirmed', '', 1)])
     return { fresh: fresh.items.slice(0, 5), toShip: toShip.items.slice(0, 5) }
   })

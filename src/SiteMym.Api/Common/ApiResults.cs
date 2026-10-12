@@ -22,7 +22,7 @@ public static class ApiResults
     {
         _ when error.Code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
         _ when error.Code.EndsWith(".Conflict", StringComparison.Ordinal) => StatusCodes.Status409Conflict,
-        "Product.NotAvailable" or "Order.ItemsJustTaken" or "Product.UsedInOrders"
+        "Product.NotAvailable" or "Order.ItemsJustTaken" or "Product.ReservedCannotDelete"
             or "Product.InvalidStatus" or "Order.InvalidStatus" => StatusCodes.Status409Conflict,
         _ when error.Code.StartsWith("Assistant.", StringComparison.Ordinal)
             && error.Code is not ("Assistant.EmptyQuestion" or "Assistant.QuestionTooLong") => StatusCodes.Status503ServiceUnavailable,

@@ -10,6 +10,9 @@ public interface IProductRepository
 {
     Task<Product?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>За артикулом («МШ-0412») — помічник у режимі дій говорить артикулами.</summary>
+    Task<Product?> GetBySkuAsync(string sku, CancellationToken ct = default);
+
     /// <summary>Для сторінки товару: /product/msh-0412.</summary>
     Task<Product?> GetBySlugAsync(string slug, CancellationToken ct = default);
 

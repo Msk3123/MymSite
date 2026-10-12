@@ -8,7 +8,8 @@ using SiteMym.Application.Assistant;
 namespace SiteMym.Api.Endpoints.Admin;
 
 /// <param name="Context">Що відкрито на екрані: «замовлення №1047» — помічник розумітиме «а що їй відповісти?».</param>
-public sealed record AssistantRequest(AssistantMessage[] Messages, string? Context);
+/// <param name="AllowActions">«Режим дій» увімкнено на фронті.</param>
+public sealed record AssistantRequest(AssistantMessage[] Messages, string? Context, bool AllowActions = false);
 
 public sealed class AssistantEndpoints : IEndpoint
 {
@@ -25,9 +26,16 @@ public sealed class AssistantEndpoints : IEndpoint
             AssistantRequest request,
             ICommandHandler<AskAssistantCommand, AssistantReply> handler,
             CancellationToken ct) =>
-            (await handler.Handle(new AskAssistantCommand(request.Messages ?? [], request.Context), ct)).ToHttp())
+            (await handler.Handle(new AskAssistantCommand(request.Messages ?? [], request.Context, request.AllowActions), ct)).ToHttp())
         .RequireRateLimiting(AdminAuth.AssistantRateLimit)
         .WithSummary("Питання помічнику; історію розмови надсилає браузер");
+
+        assistant.MapPost("/actions", async (
+            AssistantAction action,
+            ICommandHandler<ExecuteAssistantActionCommand, AssistantActionResult> handler,
+            CancellationToken ct) =>
+            (await handler.Handle(new ExecuteAssistantActionCommand(action), ct)).ToHttp())
+        .WithSummary("Мама натиснула «Так» на картці дії помічника — виконати");
 
         assistant.MapPost("/describe", async (
             IFormFileCollection files,

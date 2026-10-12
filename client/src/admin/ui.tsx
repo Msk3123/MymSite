@@ -22,6 +22,18 @@ export function useAdmin() {
   return ctx
 }
 
+const DATA_CHANGED = 'admin:data-changed'
+
+/** Дані змінились «збоку» (наприклад, помічник виконав дію) — відкриті сторінки перечитують своє. */
+export const notifyDataChanged = () => window.dispatchEvent(new Event(DATA_CHANGED))
+
+export function useDataChanged(onChange: () => void) {
+  useEffect(() => {
+    window.addEventListener(DATA_CHANGED, onChange)
+    return () => window.removeEventListener(DATA_CHANGED, onChange)
+  }, [onChange])
+}
+
 /** Сторінка каже помічнику, що відкрито: «замовлення №1047 · Ірина». */
 export function useAssistantContext(label: string) {
   const { setAssistantContext } = useAdmin()

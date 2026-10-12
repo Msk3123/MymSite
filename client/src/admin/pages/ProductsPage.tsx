@@ -1,10 +1,11 @@
-import { useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { CameraIcon, PlusIcon, SearchIcon } from '../../components/Icons'
 import { formatPrice, itemsCount } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
 import { adminApi, PRODUCT_STATUS, type AdminProductListItem, type AdminProductStatus, type BulkAction } from '../api'
-import { ConditionTag, daysSince, Empty, ErrorNote, ProductStatusDot, useAdmin, useAssistantContext } from '../ui'
+import { ConfirmDialog } from '../ConfirmDialog'
+import { ConditionTag, daysSince, Empty, ErrorNote, ProductStatusDot, useAdmin, useAssistantContext, useDataChanged } from '../ui'
 
 type Tab = AdminProductStatus | 'all'
 const TABS: Tab[] = ['all', 'available', 'reserved', 'sold', 'draft']
@@ -26,9 +27,14 @@ export function ProductsPage() {
   const search = params.get('q') ?? ''
   const [pages, setPages] = useState(1)
   const [version, setVersion] = useState(0)
+  // Помічник змінив дані (режим дій) — перечитуємо.
+  useDataChanged(useCallback(() => setVersion((v) => v + 1), []))
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkBusy, setBulkBusy] = useState(false)
-  const [bulkNote, setBulkNote] = useState<string | null>(null)
+  const location = useLocation()
+  // Повідомлення з іншої сторінки: «"Світшот" видалено.»
+  const [bulkNote, setBulkNote] = useState<string | null>((location.state as { notice?: string } | null)?.notice ?? null)
+  const [ask, setAsk] = useState<BulkAction | null>(null)
   const [bulkError, setBulkError] = useState<unknown>(null)
   const timer = useRef<number | undefined>(undefined)
 
@@ -66,16 +72,35 @@ export function ProductsPage() {
       return next
     })
 
+  const BULK_TEXT: Record<BulkAction, { title: string; text: string; confirm: string; danger?: boolean; skipped: string }> = {
+    hide: {
+      title: 'Сховати з сайту?',
+      text: 'Покупці їх не побачать. Опублікувати знову можна будь-коли.',
+      confirm: 'Так, сховати',
+      skipped: 'заброньовані, продані або вже сховані',
+    },
+    discount10: {
+      title: 'Знизити ціну на 10%?',
+      text: 'Стара ціна покажеться на сайті закресленою.',
+      confirm: 'Так, знизити',
+      skipped: 'заброньовані або продані',
+    },
+    delete: {
+      title: 'Видалити назавжди?',
+      text: 'Речі зникнуть із сайту й «Моїх речей», фото буде стерто. Повернути не вийде.',
+      confirm: 'Так, видалити',
+      danger: true,
+      skipped: 'заброньовані — вони в замовленні',
+    },
+  }
+
   const bulk = async (action: BulkAction) => {
-    const question = action === 'hide'
-      ? `Сховати з сайту ${itemsCount(chosen.length)}? Їх можна буде опублікувати знову.`
-      : `Знизити ціну на 10% для ${itemsCount(chosen.length)}? Стара ціна покажеться закресленою.`
-    if (!window.confirm(question)) return
     setBulkBusy(true)
     setBulkError(null)
     try {
       const r = await adminApi.bulk([...selected], action)
-      setBulkNote(`Готово: ${itemsCount(r.changed)}${r.skipped ? `, пропущено ${r.skipped} (заброньовані, продані або вже змінені)` : ''}.`)
+      const done = action === 'delete' ? 'Видалено' : 'Готово'
+      setBulkNote(`${done}: ${itemsCount(r.changed)}${r.skipped ? `, пропущено ${r.skipped} (${BULK_TEXT[action].skipped})` : ''}.`)
       setSelected(new Set())
       setVersion((v) => v + 1)
       refreshSummary()
@@ -83,6 +108,7 @@ export function ProductsPage() {
       setBulkError(err)
     } finally {
       setBulkBusy(false)
+      setAsk(null)
     }
   }
 
@@ -127,12 +153,20 @@ export function ProductsPage() {
       {chosen.length > 0 && (
         <div className="a-bulkbar" role="region" aria-label="Дії з вибраними">
           <b>Вибрано {itemsCount(chosen.length)}{sizes.length === 1 && ` · ${sizes[0]} см`}</b>
-          <button className="a-btn a-btn--light" disabled={bulkBusy} onClick={() => bulk('discount10')}>Знижка −10%</button>
-          <button className="a-btn a-btn--ghost-dark" disabled={bulkBusy} onClick={() => bulk('hide')}>Сховати з сайту</button>
+          <button className="a-btn a-btn--light" disabled={bulkBusy} onClick={() => setAsk('discount10')}>Знижка −10%</button>
+          <button className="a-btn a-btn--ghost-dark" disabled={bulkBusy} onClick={() => setAsk('hide')}>Сховати з сайту</button>
+          <button className="a-btn a-btn--ghost-dark a-btn--on-dark-danger" disabled={bulkBusy} onClick={() => setAsk('delete')}>Видалити</button>
           <button className="a-btn a-btn--ghost-dark" onClick={() => setSelected(new Set())}>Скасувати вибір</button>
         </div>
       )}
       {bulkNote && <p className="a-notice" role="status">{bulkNote}</p>}
+      {ask && (
+        <ConfirmDialog title={BULK_TEXT[ask].title} confirmLabel={BULK_TEXT[ask].confirm} danger={BULK_TEXT[ask].danger}
+          busy={bulkBusy} onConfirm={() => bulk(ask)} onCancel={() => setAsk(null)}>
+          <p>Вибрано <b>{itemsCount(chosen.length)}</b>: {chosen.slice(0, 3).map((p) => `«${p.name}»`).join(', ')}{chosen.length > 3 && ' …'}</p>
+          <p>{BULK_TEXT[ask].text}</p>
+        </ConfirmDialog>
+      )}
       <ErrorNote error={bulkError ?? error} />
       {data && data.items.length === 0 && <Empty>Нічого не знайшлося.</Empty>}
 

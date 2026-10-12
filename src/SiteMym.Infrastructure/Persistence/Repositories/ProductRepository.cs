@@ -11,6 +11,9 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
     public Task<Product?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
         db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
 
+    public Task<Product?> GetBySkuAsync(string sku, CancellationToken ct = default) =>
+        db.Products.FirstOrDefaultAsync(p => p.Sku == sku, ct);
+
     public Task<Product?> GetBySlugAsync(string slug, CancellationToken ct = default) =>
         db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Slug == slug, ct);
 
@@ -49,10 +52,11 @@ internal sealed class ProductRepository(AppDbContext db) : IProductRepository
         Filter(filter).CountAsync(ct);
 
     public Task<bool> ExistsBySkuAsync(string sku, CancellationToken ct = default) =>
-        db.Products.AnyAsync(p => p.Sku == sku, ct);
+        db.Products.IgnoreQueryFilters().AnyAsync(p => p.Sku == sku, ct);
 
     public async Task<IReadOnlyList<string>> GetSkusAsync(string prefix, CancellationToken ct = default) =>
-        await db.Products.AsNoTracking().Where(p => p.Sku.StartsWith(prefix)).Select(p => p.Sku).ToListAsync(ct);
+        // Включно з видаленими: артикул ніколи не повторюється, навіть якщо річ давно стерта.
+        await db.Products.AsNoTracking().IgnoreQueryFilters().Where(p => p.Sku.StartsWith(prefix)).Select(p => p.Sku).ToListAsync(ct);
 
     public async Task<IReadOnlyDictionary<ProductStatus, int>> CountByStatusAsync(CancellationToken ct = default) =>
         await db.Products.AsNoTracking()

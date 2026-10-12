@@ -1,16 +1,43 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowRightIcon, MicIcon } from '../../components/Icons'
-import type { Bubble } from './useAssistantChat'
+import { ArrowRightIcon, CheckIcon, MicIcon } from '../../components/Icons'
+import type { AssistantActionKind } from '../api'
+import { ConfirmDialog } from '../ConfirmDialog'
+import { useActionMode, type ActionCard, type Bubble } from './useAssistantChat'
 import { useDictation } from './useDictation'
+
+// Незворотні дії — червона кнопка, щоб «Так» не тиснули машинально.
+const DANGER: AssistantActionKind[] = ['delete-product', 'cancel-order']
+
+function ActionCardView({ card, onDecide }: { card: ActionCard; onDecide: (confirm: boolean) => void }) {
+  const danger = DANGER.includes(card.action.kind)
+  return (
+    <div className={`ai-action ai-action--${card.state}${danger ? ' ai-action--danger' : ''}`}>
+      <span className="ai-action__text">{card.action.summary}</span>
+      {card.state === 'pending' && (
+        <div className="ai-action__buttons">
+          <button type="button" className={`a-btn ${danger ? 'a-btn--danger' : 'a-btn--dark'}`} onClick={() => onDecide(true)}>
+            {danger ? 'Так, видалити' : 'Так, зробити'}
+          </button>
+          <button type="button" className="a-btn a-btn--outline" onClick={() => onDecide(false)}>Ні</button>
+        </div>
+      )}
+      {card.state === 'busy' && <span className="ai-action__note">Виконую…</span>}
+      {card.state === 'done' && <span className="ai-action__note ai-action__note--ok"><CheckIcon size={16} /> Зроблено</span>}
+      {card.state === 'declined' && <span className="ai-action__note">Скасовано — нічого не змінено</span>}
+      {card.state === 'error' && <span className="ai-action__note ai-action__note--error">{card.note}</span>}
+    </div>
+  )
+}
 
 interface AssistantLogProps {
   messages: Bubble[]
   busy: boolean
   /** Що показати, поки розмова порожня */
   intro?: ReactNode
+  onDecide?: (bubble: number, card: number, confirm: boolean) => void
 }
 
-export function AssistantLog({ messages, busy, intro }: AssistantLogProps) {
+export function AssistantLog({ messages, busy, intro, onDecide }: AssistantLogProps) {
   const end = useRef<HTMLDivElement>(null)
   // Фігурні дужки важливі: у нових Chrome scrollIntoView повертає Promise, а React сприйняв би його як cleanup.
   useEffect(() => {
@@ -21,11 +48,52 @@ export function AssistantLog({ messages, busy, intro }: AssistantLogProps) {
     <div className="ai-log" aria-live="polite">
       {messages.length === 0 && intro}
       {messages.map((m, i) => (
-        <div key={i} className={`ai-bubble ai-bubble--${m.role}${m.error ? ' ai-bubble--error' : ''}`}>{m.text}</div>
+        <div key={i} className="ai-turn">
+          <div className={`ai-bubble ai-bubble--${m.role}${m.error ? ' ai-bubble--error' : ''}`}>{m.text}</div>
+          {m.actions?.map((card, j) => (
+            <ActionCardView key={j} card={card} onDecide={(confirm) => onDecide?.(i, j, confirm)} />
+          ))}
+        </div>
       ))}
       {busy && <div className="ai-bubble ai-bubble--assistant ai-bubble--typing">Думаю…</div>}
       <div ref={end} />
     </div>
+  )
+}
+
+/**
+ * Перемикач «Поради / Дії». У «Діях» помічник може готувати зміни (кожна — лише після «Так» на картці).
+ * Вмикається свідомо: спершу попередження, що це розширений режим.
+ */
+export function ActionModeSwitch({ compact }: { compact?: boolean }) {
+  const [on, setOn] = useActionMode()
+  const [asking, setAsking] = useState(false)
+
+  return (
+    <>
+      <div className={`ai-mode${compact ? ' ai-mode--compact' : ''}`} role="group" aria-label="Режим помічника">
+        <button type="button" aria-pressed={!on} onClick={() => setOn(false)}>Поради</button>
+        <button type="button" aria-pressed={on} onClick={() => !on && setAsking(true)}>Дії</button>
+      </div>
+      {asking && (
+        <ConfirmDialog
+          title="Увімкнути режим дій?"
+          confirmLabel="Увімкнути"
+          cancelLabel="Лишити поради"
+          onConfirm={() => {
+            setOn(true)
+            setAsking(false)
+          }}
+          onCancel={() => setAsking(false)}
+        >
+          <p>Це <b>розширений режим</b>. Помічник зможе на ваше прохання змінювати ціни, назви й описи, публікувати,
+            ховати й <b>видаляти речі</b>, підтверджувати, відправляти й скасовувати замовлення.</p>
+          <p>Перед кожною зміною він покаже картку з тим, що збирається зробити, і нічого не змінить без вашого «Так».
+            Читайте картку уважно — помічник може помилитися.</p>
+          <p>Повернутися до звичайних порад — кнопка «Поради».</p>
+        </ConfirmDialog>
+      )}
+    </>
   )
 }
 

@@ -3,7 +3,7 @@ import { CameraIcon, SparkleIcon } from '../../components/Icons'
 import { formatPrice, plural } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
 import { adminApi } from '../api'
-import { AssistantInput, AssistantLog } from '../assistant/AssistantChat'
+import { ActionModeSwitch, AssistantInput, AssistantLog } from '../assistant/AssistantChat'
 import { useAssistantChat } from '../assistant/useAssistantChat'
 import { greeting, useAdmin, useAssistantContext } from '../ui'
 
@@ -32,10 +32,10 @@ function Briefing() {
 
 export function AssistantPage() {
   const navigate = useNavigate()
-  const { assistantContext } = useAdmin()
+  const { assistantContext, refreshSummary } = useAdmin()
   useAssistantContext('сторінка помічника')
   const { data: status } = useAsync('assistant-status', adminApi.assistantEnabled)
-  const chat = useAssistantChat(assistantContext)
+  const chat = useAssistantChat(assistantContext, refreshSummary)
 
   return (
     <div className="a-page a-page--wide ai-page">
@@ -44,8 +44,11 @@ export function AssistantPage() {
           <span className="ai-mark ai-mark--lg"><SparkleIcon size={22} /></span>
           <div>
             <h1 className="a-title">Помічник</h1>
-            <span className="a-muted">Підказує й відповідає. Змінюєте все ви.</span>
+            <span className="a-muted">
+              {chat.actionsOn ? 'Режим дій: готує зміни, виконує після вашого «Так».' : 'Підказує й відповідає. Змінюєте все ви.'}
+            </span>
           </div>
+          <ActionModeSwitch />
           {chat.messages.length > 0 && (
             <button type="button" className="a-link-btn" disabled={chat.busy} onClick={chat.reset}>Почати заново</button>
           )}
@@ -60,7 +63,7 @@ export function AssistantPage() {
           <>
             <div className="ai-page__log">
               <Briefing />
-              <AssistantLog messages={chat.messages} busy={chat.busy} />
+              <AssistantLog messages={chat.messages} busy={chat.busy} onDecide={chat.decide} />
             </div>
             <AssistantInput large hints={HINTS} busy={chat.busy} onAsk={chat.ask} placeholder="Запитайте або попросіть щось зробити…"
               before={
@@ -84,15 +87,27 @@ export function AssistantPage() {
             <li>Заповню картку речі з фото — кнопка з камерою</li>
           </ul>
         </section>
-        <section className="a-panel a-panel--green">
-          <h2 className="a-h3">Помічник ніколи сам не:</h2>
-          <ul className="ai-list ai-list--dash">
-            <li>надсилає повідомлення покупцям</li>
-            <li>змінює ціни і не видаляє речі</li>
-            <li>бачить телефони покупців</li>
-          </ul>
-          <small className="a-muted">Повідомлень із Viber і Telegram я поки не бачу.</small>
-        </section>
+        {chat.actionsOn ? (
+          <section className="a-panel a-panel--warn">
+            <h2 className="a-h3">Режим дій увімкнено</h2>
+            <ul className="ai-list ai-list--dash">
+              <li>скажіть «знизь ціну на світшот до 180» або «видали жилет на 104»</li>
+              <li>помічник покаже картку — нічого не зміниться, поки ви не натиснете «Так»</li>
+              <li>видалення — червона кнопка, повернути не можна</li>
+            </ul>
+            <small className="a-muted">Вимкнути — кнопка «Поради» вгорі.</small>
+          </section>
+        ) : (
+          <section className="a-panel a-panel--green">
+            <h2 className="a-h3">Помічник ніколи сам не:</h2>
+            <ul className="ai-list ai-list--dash">
+              <li>надсилає повідомлення покупцям</li>
+              <li>змінює ціни і не видаляє речі (для цього є режим «Дії»)</li>
+              <li>бачить телефони покупців</li>
+            </ul>
+            <small className="a-muted">Повідомлень із Viber і Telegram я поки не бачу.</small>
+          </section>
+        )}
       </aside>
     </div>
   )

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { EyeIcon, ExpandIcon, MinusIcon, SparkleIcon } from '../../components/Icons'
 import { useAdmin } from '../ui'
-import { AssistantInput, AssistantLog } from './AssistantChat'
+import { ActionModeSwitch, AssistantInput, AssistantLog } from './AssistantChat'
 import { useAssistantChat } from './useAssistantChat'
 
 /** Підказки залежать від того, що відкрито. */
@@ -15,10 +15,10 @@ function hintsFor(path: string) {
 }
 
 export function AssistantDock() {
-  const { assistantContext } = useAdmin()
+  const { assistantContext, refreshSummary } = useAdmin()
   const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
-  const chat = useAssistantChat(assistantContext)
+  const chat = useAssistantChat(assistantContext, refreshSummary)
 
   return (
     <div className={`ai-dock${open ? ' is-open' : ''}`}>
@@ -37,11 +37,13 @@ export function AssistantDock() {
           <div className="ai-dock__ctx">
             <EyeIcon />
             <span>Бачу: <b>{assistantContext}</b></span>
+            <ActionModeSwitch compact />
           </div>
           <div className="ai-dock__body">
             <AssistantLog
               messages={chat.messages}
               busy={chat.busy}
+              onDecide={chat.decide}
               intro={<div className="ai-bubble ai-bubble--assistant">Питайте простими словами — я бачу замовлення й речі і знаю, як тут усе влаштовано.</div>}
             />
           </div>

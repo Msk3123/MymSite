@@ -11,10 +11,8 @@ public sealed record DeleteProductCommand(Guid Id) : ICommand<bool>;
 
 internal sealed class DeleteProductCommandHandler(
     IProductRepository products,
-    IOrderRepository orders,
-    IUnitOfWork unitOfWork,
-    IFileStorage storage,
-    ILogger<DeleteProductCommandHandler> logger) : ICommandHandler<DeleteProductCommand, bool>
+    ProductRemover remover,
+    IUnitOfWork unitOfWork) : ICommandHandler<DeleteProductCommand, bool>
 {
     public async Task<Result<bool>> Handle(DeleteProductCommand command, CancellationToken ct)
     {
@@ -22,16 +20,50 @@ internal sealed class DeleteProductCommandHandler(
         if (product is null)
             return Result.Failure<bool>(ProductErrors.NotFound);
 
-        // Замовлення посилаються на річ — історія продажів не повинна ламатися.
-        if (await orders.ExistsWithProductAsync(product.Id, ct))
-            return Result.Failure<bool>(ProductErrors.UsedInOrders);
+        var removed = await remover.RemoveAsync(product, ct);
+        if (removed.IsFailure)
+            return Result.Failure<bool>(removed.Error);
 
-        var photoUrls = product.Photos.Select(p => p.Url).ToList();
-        products.Remove(product);
         await unitOfWork.SaveChangesAsync(ct);
+        await remover.DeleteFilesAsync(removed.Value, ct);
+        return true;
+    }
+}
 
-        // Файли прибираємо після бази: якщо впаде тут, лишиться зайвий файл, а не битий запис.
-        foreach (var url in photoUrls)
+/// <summary>
+/// Видалення речі для мами — одна дія, а під капотом два випадки:
+/// річ, яку ніхто не замовляв, стирається повністю; замовлену — ховаємо назавжди (Product.Delete),
+/// бо на неї посилаються старі замовлення. Фото стираються з диска в обох випадках — після збереження в базі.
+/// </summary>
+internal sealed class ProductRemover(
+    IProductRepository products,
+    IOrderRepository orders,
+    IFileStorage storage,
+    ILogger<ProductRemover> logger)
+{
+    /// <returns>Адреси фото, які треба стерти після SaveChanges.</returns>
+    public async Task<Result<IReadOnlyList<string>>> RemoveAsync(Product product, CancellationToken ct)
+    {
+        if (product.Status == ProductStatus.Reserved)
+            return Result.Failure<IReadOnlyList<string>>(ProductErrors.ReservedCannotDelete);
+
+        if (!await orders.ExistsWithProductAsync(product.Id, ct))
+        {
+            var urls = product.Photos.Select(p => p.Url).ToList();
+            products.Remove(product);
+            return urls;
+        }
+
+        var deleted = product.Delete();
+        return deleted.IsFailure
+            ? Result.Failure<IReadOnlyList<string>>(deleted.Error)
+            : deleted.Value.Select(p => p.Url).ToList();
+    }
+
+    // Якщо стерти файл не вдалось — лишиться зайвий файл, а не битий запис у базі.
+    public async Task DeleteFilesAsync(IEnumerable<string> urls, CancellationToken ct)
+    {
+        foreach (var url in urls)
         {
             try
             {
@@ -42,7 +74,5 @@ internal sealed class DeleteProductCommandHandler(
                 logger.LogWarning(ex, "Could not delete photo file {Url}", url);
             }
         }
-
-        return true;
     }
 }

@@ -216,6 +216,10 @@ namespace SiteMym.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<DateTime?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at_utc");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(2000)
